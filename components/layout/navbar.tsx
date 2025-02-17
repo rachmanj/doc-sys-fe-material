@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -8,7 +8,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { ChevronDown, Settings } from "lucide-react";
@@ -26,6 +25,7 @@ interface User {
 export function Navbar() {
   const router = useRouter();
   const { user, hasPermission } = useAuth();
+  const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({});
 
   const handleLogout = () => {
     Swal.fire({
@@ -43,6 +43,44 @@ export function Navbar() {
         router.push("/login");
       }
     });
+  };
+
+  const renderDropdownMenu = (
+    id: string,
+    trigger: React.ReactNode,
+    items: Array<{ href: string; label: string; onClick?: () => void }>
+  ) => {
+    return (
+      <DropdownMenu
+        open={openMenus[id]}
+        onOpenChange={(open) =>
+          setOpenMenus((prev) => ({ ...prev, [id]: open }))
+        }
+      >
+        <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-48">
+          {items.map((item) => (
+            <DropdownMenuItem key={item.href} asChild>
+              <Link
+                href={item.href}
+                className="w-full"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setOpenMenus((prev) => ({ ...prev, [id]: false }));
+                  if (item.onClick) {
+                    item.onClick();
+                  } else {
+                    router.push(item.href);
+                  }
+                }}
+              >
+                {item.label}
+              </Link>
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
   };
 
   return (
@@ -63,113 +101,66 @@ export function Navbar() {
                 Dashboard
               </Link>
             )}
-            {hasPermission("documents.index") && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="text-white">
-                    Documents
-                    <ChevronDown className="ml-2 h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48">
-                  <DropdownMenuItem>
-                    <Link href="/documents/invoices" className="w-full">
-                      Invoices
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem>
-                    <Link href="/documents/additional" className="w-full">
-                      Additional Documents
-                    </Link>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
-            {hasPermission("deliveries.index") && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="text-white">
-                    Deliveries
-                    <ChevronDown className="ml-2 h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48">
-                  <DropdownMenuItem>
-                    <Link href="/tasks/pending" className="w-full">
-                      Pending Tasks
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem>
-                    <Link href="/tasks/completed" className="w-full">
-                      Completed Tasks
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem>
-                    <Link href="/tasks/all" className="w-full">
-                      All Tasks
-                    </Link>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
+
+            {hasPermission("documents.index") &&
+              renderDropdownMenu(
+                "documents",
+                <Button variant="ghost" className="text-white">
+                  Documents
+                  <ChevronDown className="ml-2 h-4 w-4" />
+                </Button>,
+                [
+                  { href: "/documents/invoices", label: "Invoices" },
+                  {
+                    href: "/documents/additional",
+                    label: "Additional Documents",
+                  },
+                ]
+              )}
+
+            {hasPermission("deliveries.index") &&
+              renderDropdownMenu(
+                "deliveries",
+                <Button variant="ghost" className="text-white">
+                  Deliveries
+                  <ChevronDown className="ml-2 h-4 w-4" />
+                </Button>,
+                [
+                  { href: "/tasks/pending", label: "Pending Tasks" },
+                  { href: "/tasks/completed", label: "Completed Tasks" },
+                  { href: "/tasks/all", label: "All Tasks" },
+                ]
+              )}
+
             {hasPermission("settings.index") && (
               <>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" className="text-white">
-                      Master Data
-                      <ChevronDown className="ml-2 h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-48">
-                    <DropdownMenuItem>
-                      <Link href="/master/suppliers" className="w-full">
-                        Suppliers
-                      </Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem>
-                      <Link href="/master/departments" className="w-full">
-                        Departments
-                      </Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem>
-                      <Link href="/master/invoice-types" className="w-full">
-                        Invoice Types
-                      </Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem>
-                      <Link href="/master/addoc-types" className="w-full">
-                        AddDoc Types
-                      </Link>
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" className="text-white">
-                      <Settings className="h-4 w-4 mr-2" />
-                      Settings
-                      <ChevronDown className="h-4 w-4 ml-1" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-48">
-                    <DropdownMenuItem>
-                      <Link href="/settings/users" className="w-full">
-                        Users
-                      </Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem>
-                      <Link href="/settings/roles" className="w-full">
-                        Roles
-                      </Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem>
-                      <Link href="/settings/permissions" className="w-full">
-                        Permissions
-                      </Link>
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                {renderDropdownMenu(
+                  "masterData",
+                  <Button variant="ghost" className="text-white">
+                    Master Data
+                    <ChevronDown className="ml-2 h-4 w-4" />
+                  </Button>,
+                  [
+                    { href: "/master/suppliers", label: "Suppliers" },
+                    { href: "/master/departments", label: "Departments" },
+                    { href: "/master/invoice-types", label: "Invoice Types" },
+                    { href: "/master/addoc-types", label: "AddDoc Types" },
+                  ]
+                )}
+
+                {renderDropdownMenu(
+                  "settings",
+                  <Button variant="ghost" className="text-white">
+                    <Settings className="h-4 w-4 mr-2" />
+                    Settings
+                    <ChevronDown className="h-4 w-4 ml-1" />
+                  </Button>,
+                  [
+                    { href: "/settings/users", label: "Users" },
+                    { href: "/settings/roles", label: "Roles" },
+                    { href: "/settings/permissions", label: "Permissions" },
+                  ]
+                )}
               </>
             )}
           </div>
@@ -177,31 +168,22 @@ export function Navbar() {
           {/* User Menu */}
           {user && (
             <div className="flex items-center">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="text-white">
-                    {user.name} ({user.project})
-                    <ChevronDown className="ml-2 h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48">
-                  <DropdownMenuItem>
-                    <Link href="/profile" className="w-full">
-                      Profile
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem>
-                    <Link href="/change-password" className="w-full">
-                      Change Password
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem className="text-red-600">
-                    <button className="w-full text-left" onClick={handleLogout}>
-                      Logout
-                    </button>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              {renderDropdownMenu(
+                "userMenu",
+                <Button variant="ghost" className="text-white">
+                  {user.name} ({user.project})
+                  <ChevronDown className="ml-2 h-4 w-4" />
+                </Button>,
+                [
+                  { href: "/profile", label: "Profile" },
+                  { href: "/change-password", label: "Change Password" },
+                  {
+                    href: "#",
+                    label: "Logout",
+                    onClick: handleLogout,
+                  },
+                ]
+              )}
             </div>
           )}
         </div>
