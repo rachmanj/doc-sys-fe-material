@@ -145,6 +145,7 @@ export function Navbar() {
                     { href: "/master/departments", label: "Departments" },
                     { href: "/master/invoice-types", label: "Invoice Types" },
                     { href: "/master/addoc-types", label: "AddDoc Types" },
+                    { href: "/master/upload-ito", label: "ITO Upload" },
                   ]
                 )}
 
