@@ -128,6 +128,11 @@ export function Navbar() {
                       </Link>
                     </DropdownMenuItem>
                     <DropdownMenuItem>
+                      <Link href="/master/departments" className="w-full">
+                        Departments
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem>
                       <Link href="/master/invoice-types" className="w-full">
                         Invoice Types
                       </Link>
