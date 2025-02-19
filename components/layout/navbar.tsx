@@ -107,7 +107,7 @@ export function Navbar() {
                 "documents",
                 <Button variant="ghost" className="text-white">
                   Documents
-                  <ChevronDown className="ml-2 h-4 w-4" />
+                  <ChevronDown className="ml-1 h-4 w-4" />
                 </Button>,
                 [
                   { href: "/documents/invoices", label: "Invoices" },
@@ -123,7 +123,7 @@ export function Navbar() {
                 "deliveries",
                 <Button variant="ghost" className="text-white">
                   Deliveries
-                  <ChevronDown className="ml-2 h-4 w-4" />
+                  <ChevronDown className="ml-1 h-4 w-4" />
                 </Button>,
                 [
                   { href: "/tasks/pending", label: "Pending Tasks" },
@@ -138,7 +138,7 @@ export function Navbar() {
                   "masterData",
                   <Button variant="ghost" className="text-white">
                     Master Data
-                    <ChevronDown className="ml-2 h-4 w-4" />
+                    <ChevronDown className="ml-1 h-4 w-4" />
                   </Button>,
                   [
                     { href: "/master/suppliers", label: "Suppliers" },
