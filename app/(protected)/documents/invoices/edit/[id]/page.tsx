@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
+import InvoiceAttachments from "@/components/documents/invoices/invoice-attachments";
 
 export default function EditInvoicePage({
   params,
@@ -58,10 +59,7 @@ export default function EditInvoicePage({
         </TabsContent>
 
         <TabsContent value="attachments">
-          <Card className="p-6">
-            <h2 className="text-lg font-semibold mb-4">Invoice Attachments</h2>
-            {/* Attachments content will go here */}
-          </Card>
+          <InvoiceAttachments invoiceId={invoiceId} />
         </TabsContent>
       </Tabs>
     </div>

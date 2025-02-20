@@ -344,8 +344,6 @@ export default function EditInvoice({
       setIsLoading(true);
       const token = getCookie("token");
 
-      console.log("Fetching invoice data for ID:", invoiceId);
-
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/documents/invoices/get-by-id?invoice_id=${invoiceId}`,
         {
@@ -360,10 +358,7 @@ export default function EditInvoice({
       }
 
       const result = await response.json();
-      console.log("Server response:", result);
-
       const data = result.data;
-      console.log("Invoice data:", data);
 
       // Set form values
       form.reset({
@@ -381,8 +376,6 @@ export default function EditInvoice({
         payment_project: data.payment_project || "",
       });
 
-      console.log("Form values after reset:", form.getValues());
-
       // Set selected documents if they exist
       if (data.additional_documents?.length > 0) {
         setSelectedDocs(
@@ -392,7 +385,6 @@ export default function EditInvoice({
         setShowTable(true);
       }
     } catch (error) {
-      console.error("Error fetching invoice:", error);
       showToast.error({
         message: "Failed to load invoice data",
       });
@@ -420,15 +412,6 @@ export default function EditInvoice({
         user_id: user?.id,
       };
 
-      console.log("Sending update request to backend:");
-      console.log(
-        "URL:",
-        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/documents/invoices/update/${invoiceId}`
-      );
-      console.log("Method:", "PUT");
-      console.log("Payload:", JSON.stringify(payload, null, 2));
-      console.log("Selected Documents:", selectedDocs);
-
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/documents/invoices/update/${invoiceId}`,
         {
@@ -443,12 +426,10 @@ export default function EditInvoice({
 
       if (!response.ok) {
         const errorData = await response.json();
-        console.error("Error response:", errorData);
         throw new Error("Failed to update invoice");
       }
 
       const result = await response.json();
-      console.log("Success response:", result);
 
       showToast.success({
         message: "Invoice updated successfully",
@@ -456,7 +437,6 @@ export default function EditInvoice({
 
       onSuccess();
     } catch (error) {
-      console.error("Error updating invoice:", error);
       showToast.error({
         message: "Failed to update invoice",
       });
@@ -502,7 +482,6 @@ export default function EditInvoice({
         const invoiceNumber = form.getValues("invoice_number");
         const supplierId = form.getValues("supplier_id");
 
-        // Only check if both values exist
         if (invoiceNumber && supplierId) {
           const exists = await checkInvoiceNumberDuplication(
             invoiceNumber,
@@ -513,18 +492,10 @@ export default function EditInvoice({
             showToast.error({
               message: "Invoice number already exists for this supplier",
             });
-            return; // Stop the update process
+            return;
           }
         }
       }
-
-      console.log("Sending field update request to backend:");
-      console.log(
-        "URL:",
-        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/documents/invoices/update/${invoiceId}`
-      );
-      console.log("Method:", "PATCH");
-      console.log("Payload:", JSON.stringify(payload, null, 2));
 
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/documents/invoices/update/${invoiceId}`,
@@ -540,12 +511,10 @@ export default function EditInvoice({
 
       if (!response.ok) {
         const errorData = await response.json();
-        console.error("Error response:", errorData);
         throw new Error(`Failed to update ${fieldName}`);
       }
 
       const result = await response.json();
-      console.log("Success response:", result);
 
       // Format the changes for the toast message
       const changes = result.data.changes;
@@ -557,7 +526,6 @@ export default function EditInvoice({
         message: `Updated ${changeMessages}`,
       });
     } catch (error) {
-      console.error(`Error updating ${fieldName}:`, error);
       showToast.error({
         message: `Failed to update ${fieldName.replace("_", " ")}`,
       });
