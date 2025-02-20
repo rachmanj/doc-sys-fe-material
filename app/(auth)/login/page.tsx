@@ -1,7 +1,7 @@
 import { Metadata } from "next";
 import Link from "next/link";
 import { LoginForm } from "@/components/auth/login-form";
-import Image from "next/image";
+// import Image from "next/image";
 
 export const metadata: Metadata = {
   title: "Login",
@@ -14,13 +14,13 @@ export default function LoginPage() {
       <div className="w-full max-w-md">
         <div className="bg-gray-800 rounded-lg shadow-xl p-8">
           <div className="flex flex-col items-center space-y-6 mb-8">
-            <Image
+            {/* <Image
               src="/logo.png"
               alt="Logo"
               width={64}
               height={64}
               className="rounded-lg"
-            />
+            /> */}
             <div className="text-center">
               <h1 className="text-2xl text-white">IRR - Next</h1>
               <p className="text-gray-400 mt-1">Document Distribution System</p>
