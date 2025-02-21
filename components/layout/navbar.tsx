@@ -112,7 +112,7 @@ export function Navbar() {
                 [
                   { href: "/documents/invoices", label: "Invoices" },
                   {
-                    href: "/documents/additional",
+                    href: "/documents/additional-documents",
                     label: "Additional Documents",
                   },
                 ]

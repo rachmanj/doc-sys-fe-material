@@ -153,6 +153,7 @@ const UpdateButton = ({
         <Button
           type="button"
           size="icon"
+          variant="ghost"
           onClick={onClick}
           disabled={isSubmitting}
         >
