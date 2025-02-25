@@ -29,6 +29,11 @@ export interface AdditionalDocument {
   batch_no: string | null;
   created_at: string;
   updated_at: string;
+  distributions?: {
+    id: number;
+    location_code: string;
+    created_at: string;
+  }[];
 }
 
 export interface CreateAdditionalDocument {

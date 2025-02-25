@@ -126,9 +126,8 @@ export function Navbar() {
                   <ChevronDown className="ml-1 h-4 w-4" />
                 </Button>,
                 [
-                  { href: "/tasks/pending", label: "Pending Tasks" },
-                  { href: "/tasks/completed", label: "Completed Tasks" },
-                  { href: "/tasks/all", label: "All Tasks" },
+                  { href: "/deliveries/lpd", label: "LPD" },
+                  { href: "/deliveries/spi", label: "SPI" },
                 ]
               )}
 

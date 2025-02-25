@@ -5,13 +5,12 @@ import { Card } from "@/components/ui/card";
 import { useEffect, useState } from "react";
 import { AdditionalDocument } from "@/types/additional-document";
 import { getCookie } from "@/lib/cookies";
-import { Loader2 } from "lucide-react";
+import { Loader2, ArrowLeft } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useRouter } from "next/navigation";
 import { AddocEditDetails } from "./addoc-edit-details";
 import { AddocDistributions } from "./addoc-distributions";
 import { AddocAttachments } from "./addoc-attachments";
-import { Button } from "@/components/ui/button";
-import { ArrowLeft } from "lucide-react";
-import { useRouter } from "next/navigation";
 
 interface AddocEditProps {
   id: string;
@@ -25,6 +24,7 @@ export const AddocEdit = ({ id }: AddocEditProps) => {
   useEffect(() => {
     const fetchDocument = async () => {
       try {
+        setLoading(true);
         const token = getCookie("token");
         const response = await fetch(
           `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/documents/additional-documents/${id}`,
@@ -37,6 +37,21 @@ export const AddocEdit = ({ id }: AddocEditProps) => {
 
         if (!response.ok) throw new Error("Failed to fetch document");
         const result = await response.json();
+
+        // Process distributions data to ensure it's in the correct format
+        if (result.data && result.data.distributions) {
+          result.data.distributions = result.data.distributions.map(
+            (dist: any) => ({
+              id: dist.id || `dist-${Math.random().toString(36).substr(2, 9)}`,
+              location_code:
+                typeof dist.location_code === "string"
+                  ? dist.location_code
+                  : "Unknown",
+              created_at: dist.created_at || new Date().toISOString(),
+            })
+          );
+        }
+
         setDocument(result.data);
       } catch (error) {
         console.error("Error fetching document:", error);
@@ -96,9 +111,7 @@ export const AddocEdit = ({ id }: AddocEditProps) => {
         </TabsList>
 
         <TabsContent value="details">
-          <Card className="border-none shadow-sm">
-            <AddocEditDetails document={document} />
-          </Card>
+          <AddocEditDetails document={document} />
         </TabsContent>
 
         <TabsContent value="distributions">

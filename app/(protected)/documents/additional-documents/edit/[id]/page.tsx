@@ -1,17 +1,16 @@
 "use client";
 
-import { AddocEdit } from "@/components/documents/additional-documents/addoc-edit";
 import { use } from "react";
 import { PageTitle } from "@/components/ui/page-title";
+import { AddocEdit } from "@/components/documents/additional-documents/addoc-edit";
 
-interface AddocEditPageProps {
-  params: Promise<{
-    id: string;
-  }>;
+interface Params {
+  id: string;
 }
 
-export default function AddocEditPage({ params }: AddocEditPageProps) {
-  const resolvedParams = use(params);
+export default function AddocEditPage({ params }: { params: any }) {
+  const resolvedParams = use(params) as Params;
+
   return (
     <div className="space-y-4">
       <PageTitle

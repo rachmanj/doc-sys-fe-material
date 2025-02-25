@@ -36,6 +36,7 @@ const formSchema = z.object({
   po_no: z.string().optional(),
   remarks: z.string().optional(),
   cur_loc: z.string().optional(),
+  status: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -51,7 +52,9 @@ interface DocumentType {
 
 export const AddocEditDetails = ({ document }: AddocEditDetailsProps) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [locations, setLocations] = useState<string[]>([]);
+  const [locations, setLocations] = useState<
+    Array<{ id: number; location_code: string }>
+  >([]);
   const [documentTypes, setDocumentTypes] = useState<DocumentType[]>([]);
 
   const form = useForm<FormValues>({
@@ -64,6 +67,7 @@ export const AddocEditDetails = ({ document }: AddocEditDetailsProps) => {
       po_no: document.po_no || "",
       remarks: document.remarks || "",
       cur_loc: document.cur_loc || "",
+      status: document.status || "Open",
     },
   });
 
@@ -82,7 +86,23 @@ export const AddocEditDetails = ({ document }: AddocEditDetailsProps) => {
 
         if (!response.ok) throw new Error("Failed to fetch locations");
         const result = await response.json();
-        setLocations(result.data || []);
+
+        if (Array.isArray(result.data)) {
+          if (result.data.length > 0 && typeof result.data[0] === "object") {
+            setLocations(result.data);
+          } else {
+            const formattedLocations = result.data.map(
+              (loc: string, index: number) => ({
+                id: index,
+                location_code: loc,
+              })
+            );
+            setLocations(formattedLocations);
+          }
+        } else {
+          console.error("Invalid locations data format");
+          setLocations([]);
+        }
       } catch (error) {
         console.error("Error fetching locations:", error);
       }
@@ -201,7 +221,10 @@ export const AddocEditDetails = ({ document }: AddocEditDetailsProps) => {
                       </FormControl>
                       <SelectContent>
                         {documentTypes.map((type) => (
-                          <SelectItem key={type.id} value={type.id.toString()}>
+                          <SelectItem
+                            key={type.id.toString()}
+                            value={type.id.toString()}
+                          >
                             {type.type_name}
                           </SelectItem>
                         ))}
@@ -347,8 +370,11 @@ export const AddocEditDetails = ({ document }: AddocEditDetailsProps) => {
                       </FormControl>
                       <SelectContent>
                         {locations.map((loc) => (
-                          <SelectItem key={loc} value={loc}>
-                            {loc}
+                          <SelectItem
+                            key={`loc-${loc.id}`}
+                            value={loc.location_code}
+                          >
+                            {loc.location_code}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -359,6 +385,43 @@ export const AddocEditDetails = ({ document }: AddocEditDetailsProps) => {
                       variant="ghost"
                       onClick={() =>
                         handleFieldUpdate("cur_loc", field.value || "")
+                      }
+                      className="px-2"
+                    >
+                      <RefreshCw className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="status"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Status</FormLabel>
+                  <div className="flex gap-2">
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select status" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="open">Open</SelectItem>
+                        <SelectItem value="close">Close</SelectItem>
+                        <SelectItem value="cancel">Cancel</SelectItem>
+                        <SelectItem value="return">Return</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() =>
+                        handleFieldUpdate("status", field.value || "")
                       }
                       className="px-2"
                     >
