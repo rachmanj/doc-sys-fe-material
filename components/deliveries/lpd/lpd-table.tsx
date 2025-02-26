@@ -1,58 +1,91 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import DataTable from "react-data-table-component";
 import { Eye as ViewIcon, Pencil as EditIcon } from "lucide-react";
-import Pagination from "@/components/ui/pagination";
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, Loader2 } from "lucide-react";
+import { Card } from "@/components/ui/card";
 import { format } from "date-fns";
-import { useState } from "react";
 import { getCookie } from "@/lib/cookies";
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem,
-} from "@/components/ui/select";
 import { useRouter } from "next/navigation";
+import { showToast } from "@/lib/toast";
+
+interface User {
+  id: number;
+  name: string;
+  username: string;
+  email: string;
+  nik: string;
+  project: string;
+}
 
 interface LPD {
   id: number;
+  nomor: string;
   date: string;
-  origin_department: {
-    id: number;
-    name: string;
-  };
-  destination_department: {
-    id: number;
-    name: string;
-  };
+  origin_code: string;
+  destination_code: string;
   attention_person: string;
+  created_by: User;
+  sent_at: string | null;
+  received_at: string | null;
+  received_by: User | null;
   notes: string;
   status: string;
-  additional_documents: any[];
-}
-
-interface SearchParams {
-  page?: number;
-  per_page?: number;
-  date_from?: string;
-  date_to?: string;
-  origin_department?: string;
-  destination_department?: string;
-  status?: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export const LpdTable = () => {
-  const [loading, setLoading] = useState(false);
   const [data, setData] = useState<LPD[]>([]);
-  const [totalRows, setTotalRows] = useState(0);
-  const [perPage, setPerPage] = useState(10);
-  const [currentPage, setCurrentPage] = useState(1);
+  const [loading, setLoading] = useState(false);
+  const [filterText, setFilterText] = useState("");
   const router = useRouter();
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const token = getCookie("token");
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/deliveries/lpds/data`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (!response.ok) throw new Error("Failed to fetch LPDs");
+
+      const result = await response.json();
+      setData(result.data);
+    } catch (error) {
+      console.error("Error fetching LPDs:", error);
+      showToast.error({ message: "Failed to load LPDs" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const filteredItems = data.filter(
+    (item) =>
+      (item.nomor &&
+        item.nomor.toLowerCase().includes(filterText.toLowerCase())) ||
+      (item.destination_code &&
+        item.destination_code
+          .toLowerCase()
+          .includes(filterText.toLowerCase())) ||
+      (item.attention_person &&
+        item.attention_person
+          .toLowerCase()
+          .includes(filterText.toLowerCase())) ||
+      (item.status &&
+        item.status.toLowerCase().includes(filterText.toLowerCase()))
+  );
 
   const customStyles = {
     headRow: {
@@ -93,10 +126,10 @@ export const LpdTable = () => {
 
   const columns = [
     {
-      name: "#",
-      cell: (_: any, index: number) => (currentPage - 1) * perPage + index + 1,
-      width: "70px",
+      name: "LPD Number",
+      selector: (row: LPD) => row.nomor,
       sortable: true,
+      cell: (row: LPD) => <span className="text-xs">{row.nomor}</span>,
     },
     {
       name: "Date",
@@ -104,17 +137,12 @@ export const LpdTable = () => {
       sortable: true,
     },
     {
-      name: "Origin Department",
-      selector: (row: LPD) => row.origin_department.name,
+      name: "Destination",
+      selector: (row: LPD) => row.destination_code,
       sortable: true,
     },
     {
-      name: "Destination Department",
-      selector: (row: LPD) => row.destination_department.name,
-      sortable: true,
-    },
-    {
-      name: "Attention Person",
+      name: "Attention",
       selector: (row: LPD) => row.attention_person || "-",
       sortable: true,
     },
@@ -123,14 +151,21 @@ export const LpdTable = () => {
       cell: (row: LPD) => (
         <span
           className={`px-2 py-1 rounded-full text-xs font-medium ${
-            row.status === "active"
-              ? "bg-green-100 text-green-800"
-              : "bg-red-100 text-red-800"
+            row.status === "draft"
+              ? "bg-gray-100 text-gray-800"
+              : row.status === "sent"
+              ? "bg-blue-100 text-blue-800"
+              : "bg-green-100 text-green-800"
           }`}
         >
           {row.status}
         </span>
       ),
+      sortable: true,
+    },
+    {
+      name: "Created By",
+      selector: (row: LPD) => row.created_by.name,
       sortable: true,
     },
     {
@@ -140,19 +175,15 @@ export const LpdTable = () => {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => {
-              /* View action */
-            }}
-            className="h-8 w-8 text-green-600 hover:text-green-800"
+            onClick={() => router.push(`/deliveries/lpd/${row.id}`)}
+            className="h-8 w-8 text-blue-600 hover:text-blue-800"
           >
             <ViewIcon className="h-4 w-4" />
           </Button>
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => {
-              /* Edit action */
-            }}
+            onClick={() => router.push(`/deliveries/lpd/edit/${row.id}`)}
             className="h-8 w-8 text-blue-600 hover:text-blue-800"
           >
             <EditIcon className="h-4 w-4" />
@@ -165,56 +196,24 @@ export const LpdTable = () => {
   ];
 
   return (
-    <div className="space-y-4">
-      <Card className="p-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="space-y-2">
-            <label className="text-sm font-medium">LPD Number</label>
-            <Input placeholder="Search LPD number..." />
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Status</label>
-            <Select>
-              <SelectTrigger>
-                <SelectValue placeholder="Select status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="inactive">Inactive</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="flex items-end space-x-2">
-            <Button disabled={loading}>
-              {loading ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              ) : (
-                <Search className="w-4 h-4 mr-2" />
-              )}
-              Search
-            </Button>
-            <Button variant="outline" disabled={loading}>
-              Reset
-            </Button>
-          </div>
-        </div>
-      </Card>
-
-      <div>
-        <DataTable
-          columns={columns}
-          data={data}
-          progressPending={loading}
-          customStyles={customStyles}
-          pagination
-          paginationTotalRows={totalRows}
-          paginationPerPage={perPage}
-          paginationDefaultPage={currentPage}
-        />
-      </div>
-    </div>
+    <Card className="p-6">
+      <DataTable
+        columns={columns}
+        data={filteredItems}
+        customStyles={customStyles}
+        pagination
+        progressPending={loading}
+        subHeader
+        subHeaderComponent={
+          <input
+            type="text"
+            placeholder="Search..."
+            className="w-25 h-8 px-3 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            value={filterText}
+            onChange={(e) => setFilterText(e.target.value)}
+          />
+        }
+      />
+    </Card>
   );
 };

@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/select";
 import { format } from "date-fns";
 import DataTable from "react-data-table-component";
+import { Search } from "lucide-react";
 
 interface Department {
   id: number;
@@ -41,27 +42,41 @@ interface CurrentLocation {
 
 interface AdditionalDocument {
   id: number;
+  type_id: number;
   document_number: string;
   document_date: string;
-  receive_date: string | null;
-  po_no: string;
+  po_no: string | null;
+  remarks: string | null;
   status: string;
   cur_loc: string;
-  type: {
+  ito_creator: string;
+  grpo_no: string | null;
+  origin_wh: string;
+  destination_wh: string;
+}
+
+// Add interface for API response
+interface LpdCreateResponse {
+  success: boolean;
+  message: string;
+  data: {
+    nomor: string;
+    date: string;
+    origin_code: string;
+    destination_code: string;
+    attention_person: string;
+    notes: string;
+    status: string;
+    created_by: number;
+    updated_at: string;
+    created_at: string;
     id: number;
-    name: string;
-  };
-  created_by: {
-    id: number;
-    name: string;
-  };
-  invoice: {
-    id: number | null;
-    invoice_number: string | null;
+    additional_documents: Array<any>; // You can type this more specifically if needed
   };
 }
 
 const formSchema = z.object({
+  document_number: z.string().min(1, "Document number is required"),
   date: z.string().min(1, "Date is required"),
   origin_department: z.string().min(1, "Origin department is required"),
   destination_department: z
@@ -86,10 +101,14 @@ export const LpdCreate = () => {
   const [totalRows, setTotalRows] = useState(0);
   const [perPage, setPerPage] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [isLoadingDocNum, setIsLoadingDocNum] = useState(false);
+  const [filterText, setFilterText] = useState("");
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
+      document_number: "",
       date: "",
       origin_department: "",
       destination_department: "",
@@ -115,7 +134,8 @@ export const LpdCreate = () => {
 
         setUserLocationCode(locationCode);
         form.setValue("origin_department", locationCode);
-        fetchAdditionalDocuments(locationCode);
+        fetchAdditionalDocuments();
+        generateDocumentNumber(locationCode);
       } catch (error) {
         console.error("Error parsing user data:", error);
       }
@@ -143,25 +163,18 @@ export const LpdCreate = () => {
     }
   };
 
-  const fetchAdditionalDocuments = async (
-    locationCode: string,
-    page: number = 1,
-    per_page: number = 10
-  ) => {
+  const fetchAdditionalDocuments = async () => {
     try {
       setLoading(true);
       const token = getCookie("token");
-      const url = `${
-        process.env.NEXT_PUBLIC_BACKEND_URL
-      }/api/documents/additional-documents/search?cur_loc=${encodeURIComponent(
-        locationCode
-      )}&page=${page}&per_page=${per_page}`;
-
-      const response = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/deliveries/lpds/ready-to-send`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -171,8 +184,6 @@ export const LpdCreate = () => {
 
       const result = await response.json();
       setAdditionalDocuments(result.data);
-      setTotalRows(result.meta.total);
-      setCurrentPage(result.meta.current_page);
     } catch (error) {
       console.error("Error fetching additional documents:", error);
       showToast.error({ message: "Failed to load additional documents" });
@@ -181,26 +192,96 @@ export const LpdCreate = () => {
     }
   };
 
+  const generateDocumentNumber = async (deptCode: string) => {
+    try {
+      setIsLoadingDocNum(true);
+      const token = getCookie("token");
+      const response = await fetch(
+        `${
+          process.env.NEXT_PUBLIC_BACKEND_URL
+        }/api/generate-docnum?doc_type=LPD&dept_code=${encodeURIComponent(
+          deptCode
+        )}`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (!response.ok) throw new Error("Failed to generate document number");
+
+      const result = await response.json();
+      form.setValue("document_number", result.document_number);
+    } catch (error) {
+      console.error("Error generating document number:", error);
+      showToast.error({ message: "Failed to generate document number" });
+    } finally {
+      setIsLoadingDocNum(false);
+    }
+  };
+
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
       setIsSubmitting(true);
       const token = getCookie("token");
+
+      // Transform the form data to match backend requirements
+      const payload = {
+        date: values.date,
+        origin_code: values.origin_department,
+        destination_code: values.destination_department,
+        attention_person: values.attention_person || "",
+        notes: values.notes || "",
+        additional_documents: selectedDocuments,
+      };
+
+      console.log("Submitting payload:", payload);
+
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/deliveries/lpd/store`,
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/deliveries/lpds`,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify(values),
+          body: JSON.stringify(payload),
         }
       );
 
       if (!response.ok) throw new Error("Failed to create LPD");
 
-      showToast.success({ message: "LPD created successfully" });
-      form.reset();
+      const result: LpdCreateResponse = await response.json();
+
+      // Show success message with the document number
+      showToast.success({
+        message: `LPD created successfully. Document number: ${result.data.nomor}`,
+      });
+
+      // Reset form except for origin_department
+      form.reset({
+        document_number: "",
+        date: "",
+        origin_department: userLocationCode,
+        destination_department: "",
+        attention_person: "",
+        notes: "",
+        additional_documents: [],
+      });
+
+      // Reset selected documents
+      setSelectedDocuments([]);
+
+      // Generate new document number
+      await generateDocumentNumber(userLocationCode);
+
+      // Refresh the table data
+      await fetchAdditionalDocuments();
+
+      // Clear search/filter if any
+      setFilterText("");
     } catch (error) {
       console.error("Error creating LPD:", error);
       showToast.error({ message: "Failed to create LPD" });
@@ -220,13 +301,30 @@ export const LpdCreate = () => {
     });
   };
 
+  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearchTerm(value);
+
+    console.log("Search term changed to:", value);
+
+    if (value.length >= 3) {
+      console.log("Search term is 3+ characters, triggering search");
+      fetchAdditionalDocuments();
+    } else if (value === "") {
+      console.log("Search term cleared, resetting to default data");
+      fetchAdditionalDocuments();
+    } else {
+      console.log("Search term too short, not triggering search yet");
+    }
+  };
+
   const handlePageChange = (page: number) => {
-    fetchAdditionalDocuments(userLocationCode, page, perPage);
+    fetchAdditionalDocuments();
   };
 
   const handlePerRowsChange = async (newPerPage: number, page: number) => {
     setPerPage(newPerPage);
-    fetchAdditionalDocuments(userLocationCode, page, newPerPage);
+    fetchAdditionalDocuments();
   };
 
   const customStyles = {
@@ -266,6 +364,20 @@ export const LpdCreate = () => {
     },
   };
 
+  const filteredItems = additionalDocuments.filter(
+    (item) =>
+      (item.document_number &&
+        item.document_number
+          .toLowerCase()
+          .includes(filterText.toLowerCase())) ||
+      (item.po_no &&
+        item.po_no.toLowerCase().includes(filterText.toLowerCase())) ||
+      (item.remarks &&
+        item.remarks.toLowerCase().includes(filterText.toLowerCase())) ||
+      (item.destination_wh &&
+        item.destination_wh.toLowerCase().includes(filterText.toLowerCase()))
+  );
+
   const columns = [
     {
       name: "Select",
@@ -277,17 +389,15 @@ export const LpdCreate = () => {
           className="rounded border-gray-300"
         />
       ),
-      width: "80px",
+      width: "60px",
     },
     {
-      name: "DocNum",
+      name: "Document No",
       selector: (row: AdditionalDocument) => row.document_number,
       sortable: true,
-    },
-    {
-      name: "Type",
-      selector: (row: AdditionalDocument) => row.type.name,
-      sortable: true,
+      cell: (row: AdditionalDocument) => (
+        <span className="text-xs">{row.document_number}</span>
+      ),
     },
     {
       name: "Date",
@@ -301,19 +411,15 @@ export const LpdCreate = () => {
       sortable: true,
     },
     {
-      name: "Status",
-      cell: (row: AdditionalDocument) => (
-        <span
-          className={`px-2 py-1 rounded-full text-xs font-medium ${
-            row.status === "open"
-              ? "bg-green-100 text-green-800"
-              : "bg-red-100 text-red-800"
-          }`}
-        >
-          {row.status}
-        </span>
-      ),
+      name: "To",
+      selector: (row: AdditionalDocument) => row.destination_wh,
       sortable: true,
+    },
+    {
+      name: "Remarks",
+      selector: (row: AdditionalDocument) => row.remarks || "-",
+      sortable: true,
+      wrap: true,
     },
   ];
 
@@ -322,6 +428,27 @@ export const LpdCreate = () => {
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <FormField
+              control={form.control}
+              name="document_number"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Document Number</FormLabel>
+                  <FormControl>
+                    <div className="relative">
+                      <Input {...field} disabled />
+                      {isLoadingDocNum && (
+                        <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        </div>
+                      )}
+                    </div>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
             <FormField
               control={form.control}
               name="date"
@@ -335,7 +462,9 @@ export const LpdCreate = () => {
                 </FormItem>
               )}
             />
+          </div>
 
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <FormField
               control={form.control}
               name="attention_person"
@@ -349,9 +478,7 @@ export const LpdCreate = () => {
                 </FormItem>
               )}
             />
-          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <FormField
               control={form.control}
               name="origin_department"
@@ -365,7 +492,9 @@ export const LpdCreate = () => {
                 </FormItem>
               )}
             />
+          </div>
 
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <FormField
               control={form.control}
               name="destination_department"
@@ -420,24 +549,55 @@ export const LpdCreate = () => {
 
           <div className="space-y-2">
             <label className="text-sm font-medium">Additional Documents</label>
+            <div className="flex items-center space-x-2 mb-4">
+              <div className="relative flex-1">
+                <Input
+                  type="text"
+                  placeholder="Search document number, PO number, remarks..."
+                  value={filterText}
+                  onChange={(e) => setFilterText(e.target.value)}
+                  className="pl-10"
+                />
+                <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">
+                  <Search className="h-4 w-4" />
+                </div>
+              </div>
+              {filterText && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setFilterText("")}
+                >
+                  Clear
+                </Button>
+              )}
+            </div>
+
             <DataTable
               columns={columns}
-              data={additionalDocuments}
+              data={filteredItems}
               customStyles={customStyles}
               pagination
-              paginationServer
-              paginationTotalRows={totalRows}
-              onChangeRowsPerPage={handlePerRowsChange}
-              onChangePage={handlePageChange}
               progressPending={loading}
               selectableRows={false}
               dense
             />
           </div>
 
-          <Button type="submit" disabled={isSubmitting} size="sm">
-            {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-            Create LPD
+          <Button
+            type="submit"
+            disabled={isSubmitting}
+            size="sm"
+            className="w-full sm:w-auto"
+          >
+            {isSubmitting ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Creating LPD...
+              </>
+            ) : (
+              "Create LPD"
+            )}
           </Button>
         </form>
       </Form>

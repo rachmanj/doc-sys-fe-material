@@ -151,7 +151,7 @@ export default function UserDialog({
     try {
       const token = getCookie("token");
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/departments/all`,
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/master/departments/all`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -160,7 +160,8 @@ export default function UserDialog({
         }
       );
       const result = await response.json();
-      if (result.status === "success") {
+      console.log(result);
+      if (result.success) {
         setAvailableDepartments(result.data);
       }
     } catch (error) {
@@ -301,16 +302,13 @@ export default function UserDialog({
           <div className="space-y-2">
             <Label htmlFor="department">Department</Label>
             <Select
-              {...form.register("department_id")}
+              value={form.watch("department_id")}
               onValueChange={handleDepartmentChange}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Select a department" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="placeholder" disabled>
-                  Select a department
-                </SelectItem>
                 {availableDepartments.map((dept) => (
                   <SelectItem key={dept.id} value={dept.id.toString()}>
                     {dept.name} ({dept.akronim})
@@ -318,6 +316,11 @@ export default function UserDialog({
                 ))}
               </SelectContent>
             </Select>
+            {form.formState.errors.department_id && (
+              <p className="text-sm text-red-500">
+                {form.formState.errors.department_id.message}
+              </p>
+            )}
           </div>
           <div className="space-y-2">
             <Label>Roles</Label>
