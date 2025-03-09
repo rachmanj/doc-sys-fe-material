@@ -1,45 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Button } from "@/components/ui/button";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Card } from "@/components/ui/card";
-import { Textarea } from "@/components/ui/textarea";
 import { getCookie } from "@/lib/cookies";
-import { Loader2 } from "lucide-react";
-import { showToast } from "@/lib/toast";
-import { Check, ChevronsUpDown, RotateCw } from "lucide-react";
-import { cn } from "@/lib/utils";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-} from "@/components/ui/command";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { format } from "date-fns";
+import Swal from "sweetalert2";
+import { useRouter } from "next/navigation";
+import { useAppTheme } from "@/components/theme/ThemeProvider";
+import { toast } from "react-toastify";
 import {
   Supplier,
   InvoiceType,
@@ -50,14 +18,38 @@ import {
   createInvoiceSchema,
   CreateInvoiceFormValues,
 } from "@/schemas/create-invoice-schema";
-import { ArrowLeft } from "lucide-react";
-import { useRouter } from "next/navigation";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import InvoiceAttachments from "@/components/documents/invoices/invoice-attachments";
+
+// Material UI imports
+import Box from "@mui/material/Box";
+import Paper from "@mui/material/Paper";
+import Grid from "@mui/material/Grid";
+import Typography from "@mui/material/Typography";
+import TextField from "@mui/material/TextField";
+import Button from "@mui/material/Button";
+import FormControl from "@mui/material/FormControl";
+import FormHelperText from "@mui/material/FormHelperText";
+import InputLabel from "@mui/material/InputLabel";
+import Select from "@mui/material/Select";
+import MenuItem from "@mui/material/MenuItem";
+import Autocomplete from "@mui/material/Autocomplete";
+import CircularProgress from "@mui/material/CircularProgress";
+import Table from "@mui/material/Table";
+import TableBody from "@mui/material/TableBody";
+import TableCell from "@mui/material/TableCell";
+import TableContainer from "@mui/material/TableContainer";
+import TableHead from "@mui/material/TableHead";
+import TableRow from "@mui/material/TableRow";
+import Checkbox from "@mui/material/Checkbox";
+import InputAdornment from "@mui/material/InputAdornment";
+import IconButton from "@mui/material/IconButton";
+import Tooltip from "@mui/material/Tooltip";
+import Card from "@mui/material/Card";
+import CardContent from "@mui/material/CardContent";
+import Divider from "@mui/material/Divider";
+
+// Icons
+import RefreshIcon from "@mui/icons-material/Refresh";
 
 interface EditInvoiceProps {
   invoiceId: number;
@@ -147,29 +139,50 @@ const UpdateButton = ({
   isSubmitting,
   onClick,
 }: UpdateButtonProps) => (
-  <TooltipProvider>
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          type="button"
-          size="icon"
-          variant="ghost"
-          onClick={onClick}
-          disabled={isSubmitting}
-        >
-          {isSubmitting ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <RotateCw className="h-4 w-4" />
-          )}
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent>
-        <p>Update {fieldName.replace("_", " ")}</p>
-      </TooltipContent>
-    </Tooltip>
-  </TooltipProvider>
+  <Tooltip title={`Update ${fieldName.replace("_", " ")}`}>
+    <IconButton
+      size="small"
+      onClick={onClick}
+      disabled={isSubmitting}
+      color="primary"
+    >
+      {isSubmitting ? (
+        <CircularProgress size={16} />
+      ) : (
+        <RefreshIcon fontSize="small" />
+      )}
+    </IconButton>
+  </Tooltip>
 );
+
+interface TabPanelProps {
+  children?: React.ReactNode;
+  index: number;
+  value: number;
+}
+
+function TabPanel(props: TabPanelProps) {
+  const { children, value, index, ...other } = props;
+
+  return (
+    <div
+      role="tabpanel"
+      hidden={value !== index}
+      id={`invoice-tabpanel-${index}`}
+      aria-labelledby={`invoice-tab-${index}`}
+      {...other}
+    >
+      {value === index && <Box sx={{ pt: 3 }}>{children}</Box>}
+    </div>
+  );
+}
+
+function a11yProps(index: number) {
+  return {
+    id: `invoice-tab-${index}`,
+    "aria-controls": `invoice-tabpanel-${index}`,
+  };
+}
 
 export default function EditInvoice({
   invoiceId,
@@ -177,6 +190,7 @@ export default function EditInvoice({
   onCancel,
 }: EditInvoiceProps) {
   const router = useRouter();
+  const { mode } = useAppTheme();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -235,8 +249,9 @@ export default function EditInvoice({
       setSuppliers(result.data || []);
     } catch (error) {
       console.error("Error fetching suppliers:", error);
-      showToast.error({
-        message: "Failed to load suppliers",
+      Swal.fire({
+        icon: "error",
+        title: "Failed to load suppliers",
       });
     } finally {
       setIsLoadingSuppliers(false);
@@ -264,8 +279,9 @@ export default function EditInvoice({
       setInvoiceTypes(result.data || []);
     } catch (error) {
       console.error("Error fetching invoice types:", error);
-      showToast.error({
-        message: "Failed to load invoice types",
+      Swal.fire({
+        icon: "error",
+        title: "Failed to load invoice types",
       });
     } finally {
       setIsLoadingInvoiceTypes(false);
@@ -293,8 +309,9 @@ export default function EditInvoice({
       setProjects(result || []);
     } catch (error) {
       console.error("Error fetching projects:", error);
-      showToast.error({
-        message: "Failed to load projects",
+      Swal.fire({
+        icon: "error",
+        title: "Failed to load projects",
       });
     } finally {
       setIsLoadingProjects(false);
@@ -324,8 +341,9 @@ export default function EditInvoice({
       setAdditionalDocs(Array.isArray(result) ? result : []);
     } catch (error) {
       console.error("Error fetching additional documents:", error);
-      showToast.error({
-        message: "Failed to load additional documents",
+      Swal.fire({
+        icon: "error",
+        title: "Failed to load additional documents",
       });
     } finally {
       setIsLoadingDocs(false);
@@ -344,7 +362,6 @@ export default function EditInvoice({
     try {
       setIsLoading(true);
       const token = getCookie("token");
-
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/documents/invoices/get-by-id?invoice_id=${invoiceId}`,
         {
@@ -355,40 +372,61 @@ export default function EditInvoice({
       );
 
       if (!response.ok) {
-        throw new Error("Failed to fetch invoice");
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
 
       const result = await response.json();
-      const data = result.data;
+      console.log("Invoice data:", result);
 
-      // Set form values
-      form.reset({
-        invoice_number: data.invoice_number,
-        supplier_id: data.supplier_id.toString(),
-        invoice_date: data.invoice_date,
-        receive_date: data.receive_date,
-        po_no: data.po_no || "",
-        currency: data.currency,
-        amount: data.amount,
-        type_id: data.type_id.toString(),
-        remarks: data.remarks || "",
-        receive_project: data.receive_project || "",
-        invoice_project: data.invoice_project || "",
-        payment_project: data.payment_project || "",
-      });
+      if (result.success) {
+        const invoiceData = result.data;
 
-      // Set selected documents if they exist
-      if (data.additional_documents?.length > 0) {
-        setSelectedDocs(
-          data.additional_documents.map((doc: AdditionalDocument) => doc.id)
-        );
-        setAdditionalDocs(data.additional_documents);
-        setShowTable(true);
+        // Set form values
+        form.reset({
+          supplier_id: invoiceData.supplier_id.toString(),
+          type_id: invoiceData.type_id.toString(),
+          invoice_number: invoiceData.invoice_number,
+          invoice_date: invoiceData.invoice_date,
+          receive_date: invoiceData.receive_date,
+          receive_project: invoiceData.receive_project,
+          invoice_project: invoiceData.invoice_project,
+          payment_project: invoiceData.payment_project,
+          currency: invoiceData.currency,
+          amount: invoiceData.amount.toString(),
+          po_no: invoiceData.po_no,
+          remarks: invoiceData.remarks,
+        });
+
+        // If there's a PO number, fetch additional documents
+        if (invoiceData.po_no) {
+          setShowTable(true);
+          fetchAdditionalDocs(invoiceData.po_no);
+        }
+
+        // Set selected documents
+        if (
+          invoiceData.additional_documents &&
+          invoiceData.additional_documents.length > 0
+        ) {
+          setSelectedDocs(
+            invoiceData.additional_documents.map((doc: any) => doc.id)
+          );
+          setAdditionalDocs(invoiceData.additional_documents);
+        }
+      } else {
+        throw new Error(result.message || "Failed to fetch invoice data");
       }
     } catch (error) {
-      showToast.error({
-        message: "Failed to load invoice data",
+      console.error("Error fetching invoice data:", error);
+      toast.error("Failed to load invoice data. Please try again.", {
+        position: "top-right",
+        autoClose: 5000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
       });
+      onCancel(); // Go back if we can't load the invoice
     } finally {
       setIsLoading(false);
     }
@@ -404,42 +442,88 @@ export default function EditInvoice({
   const onSubmit = async (values: CreateInvoiceFormValues) => {
     try {
       setIsSubmitting(true);
+
+      // Check for invoice number and supplier combination duplication
+      const invoiceNumber = values.invoice_number;
+      const supplierId = values.supplier_id;
+
+      if (invoiceNumber && supplierId) {
+        const exists = await checkInvoiceNumberDuplication(
+          invoiceNumber,
+          supplierId
+        );
+
+        if (exists) {
+          // Keep using Swal for confirmations
+          Swal.fire({
+            icon: "error",
+            title: "Error",
+            text: "Invoice number already exists for this supplier",
+          });
+          return;
+        }
+      }
+
       const token = getCookie("token");
       const user = getUserFromLocalStorage();
 
+      // Prepare payload with selected documents
       const payload = {
         ...values,
         selected_documents: selectedDocs,
         user_id: user?.id,
       };
 
+      console.log("Submitting update with payload:", payload);
+
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/documents/invoices/update/${invoiceId}`,
         {
           method: "PUT",
           headers: {
-            "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
           },
           body: JSON.stringify(payload),
         }
       );
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error("Failed to update invoice");
-      }
-
       const result = await response.json();
+      console.log("Update response:", result);
 
-      showToast.success({
-        message: "Invoice updated successfully",
-      });
-
-      onSuccess();
+      if (response.ok && result.success) {
+        // Use react-toastify for success notifications
+        toast.success("Invoice updated successfully!", {
+          position: "top-right",
+          autoClose: 3000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+        });
+        onSuccess();
+      } else {
+        const errorMessage = result.message || "Failed to update invoice";
+        console.error(errorMessage);
+        toast.error(errorMessage, {
+          position: "top-right",
+          autoClose: 5000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+        });
+      }
     } catch (error) {
-      showToast.error({
-        message: "Failed to update invoice",
+      console.error("Error updating invoice:", error);
+      // Use react-toastify for error notifications
+      toast.error("Failed to update invoice. Please try again.", {
+        position: "top-right",
+        autoClose: 5000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
       });
     } finally {
       setIsSubmitting(false);
@@ -447,11 +531,7 @@ export default function EditInvoice({
   };
 
   const handleCancel = () => {
-    // Use searchParams to ensure we land on the list tab
-    const searchParams = new URLSearchParams();
-    searchParams.set("tab", "list");
-    router.push(`/documents/invoices?${searchParams.toString()}`);
-    router.refresh();
+    onCancel();
   };
 
   // Add function for individual field update
@@ -459,78 +539,74 @@ export default function EditInvoice({
     fieldName: keyof CreateInvoiceFormValues | "selected_documents"
   ) => {
     try {
+      // Set the specific field as submitting
       setFieldUpdates((prev) => ({
         ...prev,
         [fieldName]: { isSubmitting: true },
       }));
 
       const token = getCookie("token");
-      let payload;
+      const endpoint = `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/documents/invoices/update/${invoiceId}`;
+      let data: any = {};
 
       if (fieldName === "selected_documents") {
-        payload = {
-          selected_documents: selectedDocs,
-        };
+        data = { additional_document_ids: selectedDocs };
       } else {
-        const value = form.getValues(fieldName);
-        payload = {
-          [fieldName]: value,
-        };
+        data = { [fieldName]: form.getValues(fieldName as any) || "" };
       }
 
-      // Check for invoice number and supplier combination duplication
-      if (fieldName === "invoice_number" || fieldName === "supplier_id") {
-        const invoiceNumber = form.getValues("invoice_number");
-        const supplierId = form.getValues("supplier_id");
+      console.log(`Updating ${fieldName} with endpoint:`, endpoint);
+      console.log("Data being sent:", data);
 
-        if (invoiceNumber && supplierId) {
-          const exists = await checkInvoiceNumberDuplication(
-            invoiceNumber,
-            supplierId
-          );
-
-          if (exists) {
-            showToast.error({
-              message: "Invoice number already exists for this supplier",
-            });
-            return;
-          }
-        }
-      }
-
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/documents/invoices/update/${invoiceId}`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(payload),
-        }
-      );
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(`Failed to update ${fieldName}`);
-      }
+      const response = await fetch(endpoint, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(data),
+      });
 
       const result = await response.json();
+      console.log("Update response:", result);
 
-      // Format the changes for the toast message
-      const changes = result.data.changes;
-      const changeMessages = Object.entries(changes)
-        .map(([field, value]) => `${field.replace("_", " ")}: ${value}`)
-        .join(", ");
-
-      showToast.success({
-        message: `Updated ${changeMessages}`,
-      });
+      if (response.ok && result.success) {
+        toast.success(`${fieldName.replace("_", " ")} updated successfully!`, {
+          position: "top-right",
+          autoClose: 3000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+        });
+      } else {
+        const errorMessage =
+          result.message || `Failed to update ${fieldName.replace("_", " ")}`;
+        console.error(errorMessage);
+        toast.error(errorMessage, {
+          position: "top-right",
+          autoClose: 5000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+        });
+      }
     } catch (error) {
-      showToast.error({
-        message: `Failed to update ${fieldName.replace("_", " ")}`,
-      });
+      console.error(`Error updating ${fieldName}:`, error);
+      toast.error(
+        `Failed to update ${fieldName.replace("_", " ")}. Please try again.`,
+        {
+          position: "top-right",
+          autoClose: 5000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+        }
+      );
     } finally {
+      // Reset the submitting state for this field
       setFieldUpdates((prev) => ({
         ...prev,
         [fieldName]: { isSubmitting: false },
@@ -540,445 +616,496 @@ export default function EditInvoice({
 
   if (isLoading) {
     return (
-      <Card className="p-6">
-        <div className="flex items-center justify-center h-32">
-          <Loader2 className="w-6 h-6 animate-spin" />
-        </div>
-      </Card>
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          height: 200,
+        }}
+      >
+        <CircularProgress />
+      </Box>
     );
   }
 
   return (
-    <Card className="p-6">
-      <h2 className="text-lg font-semibold mb-4">Invoice Details</h2>
-
-      <Form {...form}>
-        <div className="space-y-6">
-          {/* First Row - Suppliers and Invoice Types */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <FormField
-              control={form.control}
-              name="supplier_id"
-              render={({ field }) => (
-                <FormItem className="flex flex-col">
-                  <FormLabel>Supplier</FormLabel>
-                  <div className="flex gap-2">
-                    <Popover open={openSupplier} onOpenChange={setOpenSupplier}>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            role="combobox"
-                            className={cn(
-                              "w-full justify-between",
-                              !field.value && "text-muted-foreground"
-                            )}
-                            disabled={isLoadingSuppliers}
-                          >
-                            {field.value
-                              ? suppliers.find(
-                                  (supplier) =>
-                                    supplier.id.toString() === field.value
-                                )?.name || "Select supplier"
-                              : "Select supplier"}
-                            {isLoadingSuppliers ? (
-                              <Loader2 className="ml-2 h-4 w-4 shrink-0 animate-spin opacity-50" />
-                            ) : (
-                              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                            )}
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-[200px] p-0">
-                        <Command>
-                          <CommandInput
-                            placeholder="Search supplier..."
-                            onValueChange={(search) => {
-                              // This will handle the search input
-                              setOpenSupplier(true);
-                            }}
-                          />
-                          <CommandEmpty>No supplier found.</CommandEmpty>
-                          <CommandGroup className="max-h-[300px] overflow-auto">
-                            {suppliers
-                              .filter((supplier) =>
-                                supplier.name.toLowerCase().includes(
-                                  // Use CommandInput's value for filtering
-                                  (
-                                    document.querySelector(
-                                      '[placeholder="Search supplier..."]'
-                                    ) as HTMLInputElement
-                                  )?.value.toLowerCase() || ""
-                                )
-                              )
-                              .map((supplier) => (
-                                <CommandItem
-                                  key={supplier.id}
-                                  value={supplier.name}
-                                  onSelect={() => {
-                                    form.setValue(
-                                      "supplier_id",
-                                      supplier.id.toString(),
-                                      {
-                                        shouldValidate: true,
-                                      }
-                                    );
-                                    setOpenSupplier(false);
-                                  }}
-                                >
-                                  <Check
-                                    className={cn(
-                                      "mr-2 h-4 w-4",
-                                      supplier.id.toString() === field.value
-                                        ? "opacity-100"
-                                        : "opacity-0"
+    <Box>
+      <Grid container spacing={3}>
+        {/* Basic Invoice Information */}
+        <Grid item xs={12}>
+          <Card
+            elevation={2}
+            sx={{
+              borderRadius: 2,
+              transition: "transform 0.3s, box-shadow 0.3s",
+              "&:hover": {
+                boxShadow: 6,
+              },
+            }}
+          >
+            <CardContent sx={{ p: 3 }}>
+              <Typography variant="h6" gutterBottom>
+                Basic Information
+              </Typography>
+              <Divider sx={{ mb: 3 }} />
+              <Grid container spacing={3}>
+                <Grid item xs={12} md={6}>
+                  <Controller
+                    name="supplier_id"
+                    control={form.control}
+                    render={({ field }) => (
+                      <FormControl
+                        fullWidth
+                        error={!!form.formState.errors.supplier_id}
+                      >
+                        <Autocomplete
+                          value={
+                            suppliers.find(
+                              (s) => s.id.toString() === field.value
+                            ) || null
+                          }
+                          onChange={(_, newValue) => {
+                            field.onChange(
+                              newValue ? newValue.id.toString() : ""
+                            );
+                          }}
+                          options={suppliers}
+                          getOptionLabel={(option) => {
+                            if (!option) return "";
+                            return `${option.name} (${option.sap_code})`;
+                          }}
+                          renderInput={(params) => (
+                            <TextField
+                              {...params}
+                              label="Supplier"
+                              error={!!form.formState.errors.supplier_id}
+                              helperText={
+                                form.formState.errors.supplier_id?.message
+                              }
+                              InputProps={{
+                                ...params.InputProps,
+                                endAdornment: (
+                                  <>
+                                    {isLoadingSuppliers ? (
+                                      <CircularProgress size={20} />
+                                    ) : (
+                                      params.InputProps.endAdornment
                                     )}
-                                  />
-                                  {supplier.name}
-                                </CommandItem>
-                              ))}
-                          </CommandGroup>
-                        </Command>
-                      </PopoverContent>
-                    </Popover>
-                    <UpdateButton
-                      fieldName="supplier selection"
-                      isSubmitting={fieldUpdates.supplier_id?.isSubmitting}
-                      onClick={() => handleFieldUpdate("supplier_id")}
-                    />
-                  </div>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="type_id"
-              render={({ field }) => (
-                <FormItem className="flex flex-col">
-                  <FormLabel>Invoice Type</FormLabel>
-                  <div className="flex gap-2">
-                    <Popover
-                      open={openInvoiceType}
-                      onOpenChange={setOpenInvoiceType}
-                    >
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            role="combobox"
-                            className={cn(
-                              "w-full justify-between",
-                              !field.value && "text-muted-foreground"
-                            )}
-                            disabled={isLoadingInvoiceTypes}
-                          >
-                            {field.value
-                              ? invoiceTypes.find(
-                                  (type) => type.id.toString() === field.value
-                                )?.type_name || "Select type"
-                              : "Select type"}
-                            {isLoadingInvoiceTypes ? (
-                              <Loader2 className="ml-2 h-4 w-4 shrink-0 animate-spin opacity-50" />
-                            ) : (
-                              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                            )}
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-[200px] p-0">
-                        <Command>
-                          <CommandInput
-                            placeholder="Search type..."
-                            onValueChange={(search) => {
-                              // This will handle the search input
-                              setOpenInvoiceType(true);
-                            }}
-                          />
-                          <CommandEmpty>No type found.</CommandEmpty>
-                          <CommandGroup className="max-h-[300px] overflow-auto">
-                            {invoiceTypes
-                              .filter((type) =>
-                                type.type_name.toLowerCase().includes(
-                                  // Use CommandInput's value for filtering
-                                  (
-                                    document.querySelector(
-                                      '[placeholder="Search type..."]'
-                                    ) as HTMLInputElement
-                                  )?.value.toLowerCase() || ""
-                                )
-                              )
-                              .map((type) => (
-                                <CommandItem
-                                  key={type.id}
-                                  value={type.type_name}
-                                  onSelect={() => {
-                                    form.setValue(
-                                      "type_id",
-                                      type.id.toString(),
-                                      {
-                                        shouldValidate: true,
-                                      }
-                                    );
-                                    setOpenInvoiceType(false);
-                                  }}
-                                >
-                                  <Check
-                                    className={cn(
-                                      "mr-2 h-4 w-4",
-                                      type.id.toString() === field.value
-                                        ? "opacity-100"
-                                        : "opacity-0"
-                                    )}
-                                  />
-                                  {type.type_name}
-                                </CommandItem>
-                              ))}
-                          </CommandGroup>
-                        </Command>
-                      </PopoverContent>
-                    </Popover>
-                    <UpdateButton
-                      fieldName="invoice type"
-                      isSubmitting={fieldUpdates.type_id?.isSubmitting}
-                      onClick={() => handleFieldUpdate("type_id")}
-                    />
-                  </div>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </div>
-
-          {/* Copy all other form fields from create-invoice.tsx */}
-          {/* Including the grid layouts and all FormFields */}
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <FormField
-              control={form.control}
-              name="invoice_number"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Invoice Number</FormLabel>
-                  <div className="flex gap-2">
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
-                    <UpdateButton
-                      fieldName="invoice number"
-                      isSubmitting={fieldUpdates.invoice_number?.isSubmitting}
-                      onClick={() => handleFieldUpdate("invoice_number")}
-                    />
-                  </div>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="invoice_date"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Invoice Date</FormLabel>
-                  <div className="flex gap-2">
-                    <FormControl>
-                      <Input type="date" {...field} />
-                    </FormControl>
-                    <UpdateButton
-                      fieldName="invoice date"
-                      isSubmitting={fieldUpdates.invoice_date?.isSubmitting}
-                      onClick={() => handleFieldUpdate("invoice_date")}
-                    />
-                  </div>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="receive_date"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Receive Date</FormLabel>
-                  <div className="flex gap-2">
-                    <FormControl>
-                      <Input type="date" {...field} />
-                    </FormControl>
-                    <UpdateButton
-                      fieldName="receive date"
-                      isSubmitting={fieldUpdates.receive_date?.isSubmitting}
-                      onClick={() => handleFieldUpdate("receive_date")}
-                    />
-                  </div>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <FormField
-              control={form.control}
-              name="receive_project"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Receive Project</FormLabel>
-                  <FormControl>
-                    <Input {...field} readOnly className="bg-muted" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="invoice_project"
-              render={({ field }) => (
-                <FormItem className="flex flex-col">
-                  <FormLabel>Invoice Project</FormLabel>
-                  <div className="flex gap-2">
-                    <Popover
-                      open={openInvoiceProject}
-                      onOpenChange={setOpenInvoiceProject}
-                    >
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant="outline"
-                            role="combobox"
-                            className={cn(
-                              "w-full justify-between",
-                              !field.value && "text-muted-foreground"
-                            )}
-                            disabled={isLoadingProjects}
-                          >
-                            {field.value || "Select project"}
-                            {isLoadingProjects ? (
-                              <Loader2 className="ml-2 h-4 w-4 shrink-0 animate-spin opacity-50" />
-                            ) : (
-                              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                            )}
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-[200px] p-0">
-                        <Command>
-                          <CommandInput placeholder="Search project..." />
-                          <CommandEmpty>No project found.</CommandEmpty>
-                          <CommandGroup className="max-h-[300px] overflow-auto">
-                            {projects.map((project) => (
-                              <CommandItem
-                                key={project.code}
-                                value={project.code}
-                                onSelect={() => {
-                                  form.setValue(
-                                    "invoice_project",
-                                    project.code,
-                                    {
-                                      shouldValidate: true,
-                                    }
-                                  );
-                                  setOpenInvoiceProject(false);
-                                }}
-                              >
-                                <Check
-                                  className={cn(
-                                    "mr-2 h-4 w-4",
-                                    project.code === field.value
-                                      ? "opacity-100"
-                                      : "opacity-0"
-                                  )}
-                                />
-                                {project.code}
-                              </CommandItem>
-                            ))}
-                          </CommandGroup>
-                        </Command>
-                      </PopoverContent>
-                    </Popover>
-                    <UpdateButton
-                      fieldName="invoice project"
-                      isSubmitting={fieldUpdates.invoice_project?.isSubmitting}
-                      onClick={() => handleFieldUpdate("invoice_project")}
-                    />
-                  </div>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="payment_project"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Payment Project</FormLabel>
-                  <div className="flex gap-2">
-                    <FormControl>
-                      <Input {...field} placeholder="Enter payment project" />
-                    </FormControl>
-                    <UpdateButton
-                      fieldName="payment project"
-                      isSubmitting={fieldUpdates.payment_project?.isSubmitting}
-                      onClick={() => handleFieldUpdate("payment_project")}
-                    />
-                  </div>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <FormField
-              control={form.control}
-              name="currency"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Currency</FormLabel>
-                  <div className="flex gap-2">
-                    <Select
-                      onValueChange={field.onChange}
-                      defaultValue={field.value}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select currency" />
-                        </SelectTrigger>
+                                    <InputAdornment position="end">
+                                      <UpdateButton
+                                        fieldName="supplier"
+                                        isSubmitting={
+                                          fieldUpdates.supplier_id?.isSubmitting
+                                        }
+                                        onClick={() =>
+                                          handleFieldUpdate("supplier_id")
+                                        }
+                                      />
+                                    </InputAdornment>
+                                  </>
+                                ),
+                              }}
+                            />
+                          )}
+                          loading={isLoadingSuppliers}
+                          disabled={isLoadingSuppliers}
+                        />
                       </FormControl>
-                      <SelectContent>
-                        <SelectItem value="IDR">IDR</SelectItem>
-                        <SelectItem value="USD">USD</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <UpdateButton
-                      fieldName="currency"
-                      isSubmitting={fieldUpdates.currency?.isSubmitting}
-                      onClick={() => handleFieldUpdate("currency")}
-                    />
-                  </div>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                    )}
+                  />
+                </Grid>
 
-            <FormField
-              control={form.control}
-              name="amount"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Amount</FormLabel>
-                  <div className="flex gap-2">
-                    <FormControl>
-                      <Input
+                <Grid item xs={12} md={6}>
+                  <Controller
+                    name="type_id"
+                    control={form.control}
+                    render={({ field }) => (
+                      <FormControl
+                        fullWidth
+                        error={!!form.formState.errors.type_id}
+                      >
+                        <Autocomplete
+                          value={
+                            invoiceTypes.find(
+                              (t) => t.id.toString() === field.value
+                            ) || null
+                          }
+                          onChange={(_, newValue) => {
+                            field.onChange(
+                              newValue ? newValue.id.toString() : ""
+                            );
+                          }}
+                          options={invoiceTypes}
+                          getOptionLabel={(option) => {
+                            if (!option) return "";
+                            return option.type_name;
+                          }}
+                          renderInput={(params) => (
+                            <TextField
+                              {...params}
+                              label="Invoice Type"
+                              error={!!form.formState.errors.type_id}
+                              helperText={
+                                form.formState.errors.type_id?.message
+                              }
+                              InputProps={{
+                                ...params.InputProps,
+                                endAdornment: (
+                                  <>
+                                    {isLoadingInvoiceTypes ? (
+                                      <CircularProgress size={20} />
+                                    ) : (
+                                      params.InputProps.endAdornment
+                                    )}
+                                    <InputAdornment position="end">
+                                      <UpdateButton
+                                        fieldName="invoice type"
+                                        isSubmitting={
+                                          fieldUpdates.type_id?.isSubmitting
+                                        }
+                                        onClick={() =>
+                                          handleFieldUpdate("type_id")
+                                        }
+                                      />
+                                    </InputAdornment>
+                                  </>
+                                ),
+                              }}
+                            />
+                          )}
+                          loading={isLoadingInvoiceTypes}
+                          disabled={isLoadingInvoiceTypes}
+                        />
+                      </FormControl>
+                    )}
+                  />
+                </Grid>
+              </Grid>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Invoice Details */}
+        <Grid item xs={12}>
+          <Card
+            elevation={2}
+            sx={{
+              borderRadius: 2,
+              transition: "transform 0.3s, box-shadow 0.3s",
+              "&:hover": {
+                boxShadow: 6,
+              },
+            }}
+          >
+            <CardContent sx={{ p: 3 }}>
+              <Typography variant="h6" gutterBottom>
+                Invoice Details
+              </Typography>
+              <Divider sx={{ mb: 3 }} />
+              <Grid container spacing={3}>
+                <Grid item xs={12} md={4}>
+                  <Controller
+                    name="invoice_number"
+                    control={form.control}
+                    render={({ field }) => (
+                      <TextField
                         {...field}
-                        type="text"
+                        fullWidth
+                        label="Invoice Number"
+                        error={!!form.formState.errors.invoice_number}
+                        helperText={
+                          form.formState.errors.invoice_number?.message
+                        }
+                        InputProps={{
+                          endAdornment: (
+                            <InputAdornment position="end">
+                              <UpdateButton
+                                fieldName="invoice number"
+                                isSubmitting={
+                                  fieldUpdates.invoice_number?.isSubmitting
+                                }
+                                onClick={() =>
+                                  handleFieldUpdate("invoice_number")
+                                }
+                              />
+                            </InputAdornment>
+                          ),
+                        }}
+                      />
+                    )}
+                  />
+                </Grid>
+
+                <Grid item xs={12} md={4}>
+                  <Controller
+                    name="invoice_date"
+                    control={form.control}
+                    render={({ field }) => (
+                      <TextField
+                        {...field}
+                        fullWidth
+                        label="Invoice Date"
+                        type="date"
+                        error={!!form.formState.errors.invoice_date}
+                        helperText={form.formState.errors.invoice_date?.message}
+                        InputLabelProps={{ shrink: true }}
+                        InputProps={{
+                          endAdornment: (
+                            <InputAdornment position="end">
+                              <UpdateButton
+                                fieldName="invoice date"
+                                isSubmitting={
+                                  fieldUpdates.invoice_date?.isSubmitting
+                                }
+                                onClick={() =>
+                                  handleFieldUpdate("invoice_date")
+                                }
+                              />
+                            </InputAdornment>
+                          ),
+                        }}
+                      />
+                    )}
+                  />
+                </Grid>
+
+                <Grid item xs={12} md={4}>
+                  <Controller
+                    name="receive_date"
+                    control={form.control}
+                    render={({ field }) => (
+                      <TextField
+                        {...field}
+                        fullWidth
+                        label="Receive Date"
+                        type="date"
+                        error={!!form.formState.errors.receive_date}
+                        helperText={form.formState.errors.receive_date?.message}
+                        InputLabelProps={{ shrink: true }}
+                        InputProps={{
+                          endAdornment: (
+                            <InputAdornment position="end">
+                              <UpdateButton
+                                fieldName="receive date"
+                                isSubmitting={
+                                  fieldUpdates.receive_date?.isSubmitting
+                                }
+                                onClick={() =>
+                                  handleFieldUpdate("receive_date")
+                                }
+                              />
+                            </InputAdornment>
+                          ),
+                        }}
+                      />
+                    )}
+                  />
+                </Grid>
+              </Grid>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Project Information */}
+        <Grid item xs={12}>
+          <Card
+            elevation={2}
+            sx={{
+              borderRadius: 2,
+              transition: "transform 0.3s, box-shadow 0.3s",
+              "&:hover": {
+                boxShadow: 6,
+              },
+            }}
+          >
+            <CardContent sx={{ p: 3 }}>
+              <Typography variant="h6" gutterBottom>
+                Project Information
+              </Typography>
+              <Divider sx={{ mb: 3 }} />
+              <Grid container spacing={3}>
+                <Grid item xs={12} md={4}>
+                  <Controller
+                    name="receive_project"
+                    control={form.control}
+                    render={({ field }) => (
+                      <TextField
+                        {...field}
+                        fullWidth
+                        label="Receive Project"
+                        disabled
+                        error={!!form.formState.errors.receive_project}
+                        helperText={
+                          form.formState.errors.receive_project?.message
+                        }
+                      />
+                    )}
+                  />
+                </Grid>
+
+                <Grid item xs={12} md={4}>
+                  <Controller
+                    name="invoice_project"
+                    control={form.control}
+                    render={({ field }) => (
+                      <FormControl
+                        fullWidth
+                        error={!!form.formState.errors.invoice_project}
+                      >
+                        <Autocomplete
+                          value={
+                            projects.find((p) => p.code === field.value) || null
+                          }
+                          onChange={(_, newValue) => {
+                            field.onChange(newValue ? newValue.code : "");
+                          }}
+                          options={projects}
+                          getOptionLabel={(option) => {
+                            if (!option) return "";
+                            return option.code;
+                          }}
+                          renderInput={(params) => (
+                            <TextField
+                              {...params}
+                              label="Invoice Project"
+                              error={!!form.formState.errors.invoice_project}
+                              helperText={
+                                form.formState.errors.invoice_project?.message
+                              }
+                              InputProps={{
+                                ...params.InputProps,
+                                endAdornment: (
+                                  <>
+                                    {isLoadingProjects ? (
+                                      <CircularProgress size={20} />
+                                    ) : (
+                                      params.InputProps.endAdornment
+                                    )}
+                                    <InputAdornment position="end">
+                                      <UpdateButton
+                                        fieldName="invoice project"
+                                        isSubmitting={
+                                          fieldUpdates.invoice_project
+                                            ?.isSubmitting
+                                        }
+                                        onClick={() =>
+                                          handleFieldUpdate("invoice_project")
+                                        }
+                                      />
+                                    </InputAdornment>
+                                  </>
+                                ),
+                              }}
+                            />
+                          )}
+                          loading={isLoadingProjects}
+                          disabled={isLoadingProjects}
+                        />
+                      </FormControl>
+                    )}
+                  />
+                </Grid>
+
+                <Grid item xs={12} md={4}>
+                  <Controller
+                    name="payment_project"
+                    control={form.control}
+                    render={({ field }) => (
+                      <TextField
+                        {...field}
+                        fullWidth
+                        label="Payment Project"
+                        error={!!form.formState.errors.payment_project}
+                        helperText={
+                          form.formState.errors.payment_project?.message
+                        }
+                        InputProps={{
+                          endAdornment: (
+                            <InputAdornment position="end">
+                              <UpdateButton
+                                fieldName="payment project"
+                                isSubmitting={
+                                  fieldUpdates.payment_project?.isSubmitting
+                                }
+                                onClick={() =>
+                                  handleFieldUpdate("payment_project")
+                                }
+                              />
+                            </InputAdornment>
+                          ),
+                        }}
+                      />
+                    )}
+                  />
+                </Grid>
+              </Grid>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Payment Information */}
+        <Grid item xs={12}>
+          <Card
+            elevation={2}
+            sx={{
+              borderRadius: 2,
+              transition: "transform 0.3s, box-shadow 0.3s",
+              "&:hover": {
+                boxShadow: 6,
+              },
+            }}
+          >
+            <CardContent sx={{ p: 3 }}>
+              <Typography variant="h6" gutterBottom>
+                Payment Information
+              </Typography>
+              <Divider sx={{ mb: 3 }} />
+              <Grid container spacing={3}>
+                <Grid item xs={12} md={4}>
+                  <Controller
+                    name="currency"
+                    control={form.control}
+                    render={({ field }) => (
+                      <FormControl
+                        fullWidth
+                        error={!!form.formState.errors.currency}
+                      >
+                        <InputLabel>Currency</InputLabel>
+                        <Select
+                          {...field}
+                          label="Currency"
+                          endAdornment={
+                            <InputAdornment position="end">
+                              <UpdateButton
+                                fieldName="currency"
+                                isSubmitting={
+                                  fieldUpdates.currency?.isSubmitting
+                                }
+                                onClick={() => handleFieldUpdate("currency")}
+                              />
+                            </InputAdornment>
+                          }
+                        >
+                          <MenuItem value="IDR">IDR</MenuItem>
+                          <MenuItem value="USD">USD</MenuItem>
+                        </Select>
+                        <FormHelperText>
+                          {form.formState.errors.currency?.message}
+                        </FormHelperText>
+                      </FormControl>
+                    )}
+                  />
+                </Grid>
+
+                <Grid item xs={12} md={4}>
+                  <Controller
+                    name="amount"
+                    control={form.control}
+                    render={({ field }) => (
+                      <TextField
+                        fullWidth
+                        label="Amount"
                         value={formatNumber(field.value)}
                         onChange={(e) => {
                           const value = e.target.value;
@@ -988,166 +1115,263 @@ export default function EditInvoice({
                           }
                         }}
                         onBlur={(e) => {
+                          field.onBlur();
                           const value = unformatNumber(e.target.value);
                           if (value && !isNaN(Number(value))) {
                             field.onChange(value);
                           }
                         }}
+                        error={!!form.formState.errors.amount}
+                        helperText={form.formState.errors.amount?.message}
+                        InputProps={{
+                          endAdornment: (
+                            <InputAdornment position="end">
+                              <UpdateButton
+                                fieldName="amount"
+                                isSubmitting={fieldUpdates.amount?.isSubmitting}
+                                onClick={() => handleFieldUpdate("amount")}
+                              />
+                            </InputAdornment>
+                          ),
+                        }}
                       />
-                    </FormControl>
-                    <UpdateButton
-                      fieldName="amount"
-                      isSubmitting={fieldUpdates.amount?.isSubmitting}
-                      onClick={() => handleFieldUpdate("amount")}
-                    />
-                  </div>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="po_no"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>PO Number</FormLabel>
-                  <FormControl>
-                    <Input
-                      {...field}
-                      onBlur={(e) => {
-                        field.onBlur();
-                        if (e.target.value) {
-                          setShowTable(true);
-                          fetchAdditionalDocs(e.target.value);
-                        } else {
-                          setShowTable(false);
-                          setAdditionalDocs([]);
-                        }
-                      }}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </div>
-
-          {showTable && (
-            <div className="mt-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-medium">
-                  Additional Documents for PO: {form.getValues("po_no")}
-                </h3>
-                <UpdateButton
-                  fieldName="selected documents"
-                  isSubmitting={fieldUpdates.selected_documents?.isSubmitting}
-                  onClick={() => handleFieldUpdate("selected_documents")}
-                />
-              </div>
-              <div className="relative overflow-x-auto border rounded-lg">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b bg-muted">
-                      <th className="text-left py-3 px-4">
-                        <input
-                          type="checkbox"
-                          className="rounded border-gray-300"
-                          checked={
-                            selectedDocs.length === additionalDocs.length
-                          }
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setSelectedDocs(
-                                additionalDocs.map((doc) => doc.id)
-                              );
-                            } else {
-                              setSelectedDocs([]);
-                            }
-                          }}
-                        />
-                      </th>
-                      <th className="text-left py-3 px-4">Document No</th>
-                      <th className="text-left py-3 px-4">Type</th>
-                      <th className="text-left py-3 px-4">Document Date</th>
-                      <th className="text-left py-3 px-4">Receive Date</th>
-                      <th className="text-left py-3 px-4">Location</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {isLoadingDocs ? (
-                      <tr>
-                        <td colSpan={6} className="text-center py-4">
-                          <Loader2 className="w-6 h-6 animate-spin mx-auto" />
-                        </td>
-                      </tr>
-                    ) : additionalDocs.length === 0 ? (
-                      <tr>
-                        <td
-                          colSpan={6}
-                          className="text-center py-4 text-muted-foreground"
-                        >
-                          No additional documents found
-                        </td>
-                      </tr>
-                    ) : (
-                      additionalDocs.map((doc) => (
-                        <tr key={doc.id} className="border-b hover:bg-muted/50">
-                          <td className="py-3 px-4">
-                            <input
-                              type="checkbox"
-                              className="rounded border-gray-300"
-                              checked={selectedDocs.includes(doc.id)}
-                              onChange={() => handleDocumentSelect(doc.id)}
-                            />
-                          </td>
-                          <td className="py-3 px-4">{doc.document_number}</td>
-                          <td className="py-3 px-4">
-                            {doc.type_id === 26 ? "ITO" : "Other"}
-                          </td>
-                          <td className="py-3 px-4">
-                            {format(new Date(doc.document_date), "dd MMM yyyy")}
-                          </td>
-                          <td className="py-3 px-4">
-                            {doc.receive_date
-                              ? format(
-                                  new Date(doc.receive_date),
-                                  "dd MMM yyyy"
-                                )
-                              : "-"}
-                          </td>
-                          <td className="py-3 px-4">{doc.cur_loc}</td>
-                        </tr>
-                      ))
                     )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          <FormField
-            control={form.control}
-            name="remarks"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Remarks</FormLabel>
-                <div className="flex gap-2">
-                  <FormControl>
-                    <Textarea {...field} className="min-h-[100px]" />
-                  </FormControl>
-                  <UpdateButton
-                    fieldName="remarks"
-                    isSubmitting={fieldUpdates.remarks?.isSubmitting}
-                    onClick={() => handleFieldUpdate("remarks")}
                   />
-                </div>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        </div>
-      </Form>
-    </Card>
+                </Grid>
+
+                <Grid item xs={12} md={4}>
+                  <Controller
+                    name="po_no"
+                    control={form.control}
+                    render={({ field }) => (
+                      <TextField
+                        {...field}
+                        fullWidth
+                        label="PO Number"
+                        error={!!form.formState.errors.po_no}
+                        helperText={form.formState.errors.po_no?.message}
+                        onBlur={(e) => {
+                          field.onBlur();
+                          if (e.target.value) {
+                            setShowTable(true);
+                            fetchAdditionalDocs(e.target.value);
+                          } else {
+                            setShowTable(false);
+                            setAdditionalDocs([]);
+                            setSelectedDocs([]);
+                          }
+                        }}
+                        InputProps={{
+                          endAdornment: (
+                            <InputAdornment position="end">
+                              <UpdateButton
+                                fieldName="po number"
+                                isSubmitting={fieldUpdates.po_no?.isSubmitting}
+                                onClick={() => handleFieldUpdate("po_no")}
+                              />
+                            </InputAdornment>
+                          ),
+                        }}
+                      />
+                    )}
+                  />
+                </Grid>
+              </Grid>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Additional Documents */}
+        {showTable && (
+          <Grid item xs={12}>
+            <Card
+              elevation={2}
+              sx={{
+                borderRadius: 2,
+                transition: "transform 0.3s, box-shadow 0.3s",
+                "&:hover": {
+                  boxShadow: 6,
+                },
+              }}
+            >
+              <CardContent sx={{ p: 3 }}>
+                <Typography variant="h6" gutterBottom>
+                  Additional Documents
+                </Typography>
+                <Divider sx={{ mb: 3 }} />
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="subtitle1" gutterBottom>
+                    Additional Documents for PO: {form.getValues("po_no")}
+                  </Typography>
+                  <TableContainer>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell padding="checkbox">
+                            <Checkbox
+                              color="primary"
+                              indeterminate={
+                                selectedDocs.length > 0 &&
+                                selectedDocs.length < additionalDocs.length
+                              }
+                              checked={
+                                selectedDocs.length === additionalDocs.length &&
+                                additionalDocs.length > 0
+                              }
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedDocs(
+                                    additionalDocs.map((doc) => doc.id)
+                                  );
+                                } else {
+                                  setSelectedDocs([]);
+                                }
+                              }}
+                            />
+                          </TableCell>
+                          <TableCell>Document No</TableCell>
+                          <TableCell>Type</TableCell>
+                          <TableCell>Document Date</TableCell>
+                          <TableCell>Receive Date</TableCell>
+                          <TableCell>Location</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {isLoadingDocs ? (
+                          <TableRow>
+                            <TableCell colSpan={6} align="center">
+                              <CircularProgress size={20} />
+                            </TableCell>
+                          </TableRow>
+                        ) : additionalDocs.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={6} align="center">
+                              No additional documents found
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          additionalDocs.map((doc) => (
+                            <TableRow key={doc.id} hover>
+                              <TableCell padding="checkbox">
+                                <Checkbox
+                                  color="primary"
+                                  checked={selectedDocs.includes(doc.id)}
+                                  onChange={() => handleDocumentSelect(doc.id)}
+                                />
+                              </TableCell>
+                              <TableCell>{doc.document_number}</TableCell>
+                              <TableCell>
+                                {doc.type_id === 26 ? "ITO" : "Other"}
+                              </TableCell>
+                              <TableCell>
+                                {new Date(
+                                  doc.document_date
+                                ).toLocaleDateString()}
+                              </TableCell>
+                              <TableCell>
+                                {doc.receive_date
+                                  ? new Date(
+                                      doc.receive_date
+                                    ).toLocaleDateString()
+                                  : "-"}
+                              </TableCell>
+                              <TableCell>{doc.cur_loc}</TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                  <Box
+                    sx={{ mt: 2, display: "flex", justifyContent: "flex-end" }}
+                  >
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={() => handleFieldUpdate("selected_documents")}
+                      disabled={fieldUpdates.selected_documents?.isSubmitting}
+                      startIcon={
+                        fieldUpdates.selected_documents?.isSubmitting ? (
+                          <CircularProgress size={16} />
+                        ) : null
+                      }
+                    >
+                      Update Selected Documents
+                    </Button>
+                  </Box>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+        )}
+
+        {/* Remarks */}
+        <Grid item xs={12}>
+          <Card
+            elevation={2}
+            sx={{
+              borderRadius: 2,
+              transition: "transform 0.3s, box-shadow 0.3s",
+              "&:hover": {
+                boxShadow: 6,
+              },
+            }}
+          >
+            <CardContent sx={{ p: 3 }}>
+              <Typography variant="h6" gutterBottom>
+                Remarks
+              </Typography>
+              <Divider sx={{ mb: 3 }} />
+              <Grid container spacing={3}>
+                <Grid item xs={12}>
+                  <Controller
+                    name="remarks"
+                    control={form.control}
+                    render={({ field }) => (
+                      <TextField
+                        {...field}
+                        fullWidth
+                        label="Remarks"
+                        multiline
+                        rows={4}
+                        error={!!form.formState.errors.remarks}
+                        helperText={form.formState.errors.remarks?.message}
+                        InputProps={{
+                          endAdornment: (
+                            <InputAdornment position="end">
+                              <UpdateButton
+                                fieldName="remarks"
+                                isSubmitting={
+                                  fieldUpdates.remarks?.isSubmitting
+                                }
+                                onClick={() => handleFieldUpdate("remarks")}
+                              />
+                            </InputAdornment>
+                          ),
+                        }}
+                      />
+                    )}
+                  />
+                </Grid>
+              </Grid>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Attachments */}
+        <Grid item xs={12}>
+          <InvoiceAttachments invoiceId={invoiceId} />
+        </Grid>
+
+        {/* Back Button */}
+        <Grid item xs={12}>
+          <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 2 }}>
+            <Button variant="outlined" onClick={handleCancel}>
+              Back
+            </Button>
+          </Box>
+        </Grid>
+      </Grid>
+    </Box>
   );
 }

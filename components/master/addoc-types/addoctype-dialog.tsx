@@ -1,21 +1,24 @@
+"use client";
+
 import { useState, useEffect } from "react";
 import { getCookie } from "@/lib/cookies";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { getApiEndpoint } from "@/lib/api";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import * as z from "zod";
-import Swal from "sweetalert2";
 import { AddocType } from "@/types/addoc-type";
+import Swal from "sweetalert2";
+import { useAppTheme } from "@/components/theme/ThemeProvider";
+
+// Material UI imports
+import Dialog from "@mui/material/Dialog";
+import DialogActions from "@mui/material/DialogActions";
+import DialogContent from "@mui/material/DialogContent";
+import DialogTitle from "@mui/material/DialogTitle";
+import Button from "@mui/material/Button";
+import TextField from "@mui/material/TextField";
+import Grid from "@mui/material/Grid";
+import CircularProgress from "@mui/material/CircularProgress";
 
 interface AddocTypeDialogProps {
   open: boolean;
@@ -26,7 +29,7 @@ interface AddocTypeDialogProps {
 }
 
 const addocTypeFormSchema = z.object({
-  type_name: z.string().min(1, "Name is required"),
+  type_name: z.string().min(1, "Type name is required"),
 });
 
 type AddocTypeFormValues = z.infer<typeof addocTypeFormSchema>;
@@ -38,71 +41,79 @@ export default function AddocTypeDialog({
   onSave,
   refreshData,
 }: AddocTypeDialogProps) {
+  const { mode } = useAppTheme();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const form = useForm<AddocTypeFormValues>({
+  const {
+    control,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<AddocTypeFormValues>({
     resolver: zodResolver(addocTypeFormSchema),
     defaultValues: {
       type_name: "",
     },
   });
 
+  // Update form when addocType changes
   useEffect(() => {
     if (addocType) {
-      form.reset({
+      reset({
         type_name: addocType.type_name,
       });
+    } else {
+      reset({
+        type_name: "",
+      });
     }
-  }, [addocType, form]);
+  }, [addocType, reset]);
 
   const onSubmit = async (data: AddocTypeFormValues) => {
+    setIsSubmitting(true);
     try {
-      setIsSubmitting(true);
       const token = getCookie("token");
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/master/document-types${
-          addocType ? `/${addocType.id}` : ""
-        }`,
-        {
-          method: addocType ? "PUT" : "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(data),
-        }
-      );
+      const url = addocType
+        ? `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/master/document-types/${addocType.id}`
+        : `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/master/document-types`;
+      const method = addocType ? "PUT" : "POST";
+
+      const response = await fetch(url, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+        },
+        body: JSON.stringify(data),
+      });
 
       const result = await response.json();
 
-      if (result.error) {
-        setIsSubmitting(false);
-        await Swal.fire({
-          icon: "error",
-          title: "Error",
-          text: result.message,
-          timer: 1500,
-        });
-        return;
+      if (!response.ok) {
+        throw new Error(
+          result.message || "Failed to save additional document type"
+        );
       }
 
-      if (result.success) {
-        await Swal.fire({
-          icon: "success",
-          title: addocType ? "Document Type Updated" : "Document Type Created",
-          text: result.message,
-          timer: 1500,
-        });
-        form.reset();
-        onSave(result.data);
-        onOpenChange(false);
-      }
+      Swal.fire({
+        icon: "success",
+        title: "Success",
+        text: addocType
+          ? "Additional document type updated successfully"
+          : "Additional document type created successfully",
+        timer: 1500,
+      });
+
+      onSave(result.data);
+      onOpenChange(false);
+      refreshData();
     } catch (error) {
-      console.error("Error:", error);
-      await Swal.fire({
+      console.error("Error saving additional document type:", error);
+      Swal.fire({
         icon: "error",
         title: "Error",
-        text: error instanceof Error ? error.message : "Something went wrong",
+        text: "Failed to save additional document type",
       });
     } finally {
       setIsSubmitting(false);
@@ -110,43 +121,59 @@ export default function AddocTypeDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>
-            {addocType ? "Edit Document Type" : "Create Document Type"}
-          </DialogTitle>
-        </DialogHeader>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="type_name">Name</Label>
-            <Input
-              {...form.register("type_name")}
-              id="type_name"
-              placeholder="Enter document type name"
-            />
-            {form.formState.errors.type_name && (
-              <p className="text-sm text-red-500">
-                {form.formState.errors.type_name.message}
-              </p>
-            )}
-          </div>
-
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={isSubmitting}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? "Saving..." : addocType ? "Update" : "Create"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
+    <Dialog
+      open={open}
+      onClose={() => onOpenChange(false)}
+      fullWidth
+      maxWidth="sm"
+    >
+      <DialogTitle>
+        {addocType
+          ? "Edit Additional Document Type"
+          : "Add New Additional Document Type"}
+      </DialogTitle>
+      <form onSubmit={handleSubmit(onSubmit)}>
+        <DialogContent>
+          <Grid container spacing={2}>
+            <Grid item xs={12}>
+              <Controller
+                name="type_name"
+                control={control}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    label="Type Name"
+                    fullWidth
+                    margin="normal"
+                    required
+                    error={!!errors.type_name}
+                    helperText={errors.type_name?.message}
+                    disabled={isSubmitting}
+                    autoFocus
+                  />
+                )}
+              />
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button
+            onClick={() => onOpenChange(false)}
+            disabled={isSubmitting}
+            variant="outlined"
+          >
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            variant="contained"
+            disabled={isSubmitting}
+            startIcon={isSubmitting ? <CircularProgress size={20} /> : null}
+          >
+            {isSubmitting ? "Saving..." : "Save"}
+          </Button>
+        </DialogActions>
+      </form>
     </Dialog>
   );
 }

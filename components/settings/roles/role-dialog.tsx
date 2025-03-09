@@ -48,9 +48,8 @@ interface Role {
 
 interface RoleDialogProps {
   open: boolean;
-  setOpen: (open: boolean) => void;
+  onOpenChange: (open: boolean) => void;
   role: Role | null;
-  onClose: () => void;
   onSuccess: () => void;
 }
 
@@ -65,9 +64,8 @@ interface PermissionResponse {
 
 export function RoleDialog({
   open,
-  setOpen,
+  onOpenChange,
   role,
-  onClose,
   onSuccess,
 }: RoleDialogProps) {
   const [loading, setLoading] = useState(false);
@@ -158,8 +156,12 @@ export function RoleDialog({
     }
   }
 
+  const handleCancel = () => {
+    onOpenChange(false);
+  };
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>{role ? "Edit Role" : "Create Role"}</DialogTitle>
@@ -226,7 +228,7 @@ export function RoleDialog({
               )}
             />
             <div className="flex justify-end space-x-2">
-              <Button variant="outline" onClick={onClose}>
+              <Button variant="outline" onClick={handleCancel}>
                 Cancel
               </Button>
               <Button type="submit" disabled={loading}>

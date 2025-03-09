@@ -1,31 +1,42 @@
 "use client";
 
 import { useState, useEffect } from "react";
-
 import UsersTable from "@/components/settings/users/users-table";
-import UserSearch from "@/components/settings/users/user-search";
 import UserDialog from "@/components/settings/users/user-dialog";
 import { User } from "@/types/user";
-import { Button } from "@/components/ui/button";
-import { Plus as PlusIcon } from "lucide-react";
 import { getCookie } from "@/lib/cookies";
-import { PageTitle } from "@/components/ui/page-title";
+import { getApiEndpoint } from "@/lib/api";
 import Swal from "sweetalert2";
 
+// Material UI imports
+import Box from "@mui/material/Box";
+import Typography from "@mui/material/Typography";
+import Button from "@mui/material/Button";
+import AddIcon from "@mui/icons-material/Add";
+import Paper from "@mui/material/Paper";
+import CircularProgress from "@mui/material/CircularProgress";
+import { useAppTheme } from "@/components/theme/ThemeProvider";
+import TextField from "@mui/material/TextField";
+import InputAdornment from "@mui/material/InputAdornment";
+import SearchIcon from "@mui/icons-material/Search";
+
 export default function UsersPage() {
+  const { mode } = useAppTheme();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | undefined>();
   const [data, setData] = useState<User[]>([]);
+  const [filteredData, setFilteredData] = useState<User[]>([]);
   const [totalRows, setTotalRows] = useState(0);
   const [perPage, setPerPage] = useState(10);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
 
-  const fetchUsers = async (page: number) => {
+  const fetchUsers = async () => {
     setLoading(true);
     try {
       const token = getCookie("token");
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/users?page=${page}&per_page=${perPage}`,
+        getApiEndpoint(`/api/users?per_page=100`), // Get more users at once for client-side filtering
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -36,7 +47,8 @@ export default function UsersPage() {
       const result = await response.json();
       if (result.status === "success") {
         setData(result.data);
-        setTotalRows(result.meta?.total || result.data.length);
+        setFilteredData(result.data);
+        setTotalRows(result.data.length);
       }
     } catch (error) {
       console.error("Error fetching users:", error);
@@ -46,35 +58,33 @@ export default function UsersPage() {
   };
 
   useEffect(() => {
-    fetchUsers(1);
+    fetchUsers();
   }, []);
 
-  const handleSearch = async (query: string) => {
-    setLoading(true);
-    try {
-      const token = getCookie("token");
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/users?search=${query}&page=1&per_page=${perPage}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/json",
-          },
-        }
+  // Filter users when search query changes
+  useEffect(() => {
+    if (searchQuery.trim() === "") {
+      setFilteredData(data);
+      setTotalRows(data.length);
+    } else {
+      const lowercaseQuery = searchQuery.toLowerCase();
+      const filtered = data.filter(
+        (user) =>
+          user.name.toLowerCase().includes(lowercaseQuery) ||
+          user.username.toLowerCase().includes(lowercaseQuery) ||
+          user.email.toLowerCase().includes(lowercaseQuery) ||
+          user.project.toLowerCase().includes(lowercaseQuery) ||
+          (user.department &&
+            (typeof user.department === "string"
+              ? user.department.toLowerCase().includes(lowercaseQuery)
+              : user.department &&
+                "name" in user.department &&
+                user.department.name.toLowerCase().includes(lowercaseQuery)))
       );
-      const result = await response.json();
-      if (result.status === "success") {
-        setData(result.data);
-        setTotalRows(result.meta?.total || result.data.length);
-      }
-    } catch (error) {
-      console.error("Error searching users:", error);
-      setData([]);
-      setTotalRows(0);
-    } finally {
-      setLoading(false);
+      setFilteredData(filtered);
+      setTotalRows(filtered.length);
     }
-  };
+  }, [searchQuery, data]);
 
   const handleEdit = (user: User) => {
     setSelectedUser(user);
@@ -95,20 +105,17 @@ export default function UsersPage() {
     if (result.isConfirmed) {
       try {
         const token = getCookie("token");
-        const response = await fetch(
-          `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/users/${user.id}`,
-          {
-            method: "DELETE",
-            headers: {
-              Authorization: `Bearer ${token}`,
-              Accept: "application/json",
-            },
-          }
-        );
+        const response = await fetch(getApiEndpoint(`/api/users/${user.id}`), {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+          },
+        });
         const data = await response.json();
         if (data.status === "success") {
           Swal.fire("Deleted!", "User has been deleted.", "success");
-          fetchUsers(1);
+          fetchUsers();
         }
       } catch (error) {
         Swal.fire("Error!", "Failed to delete user.", "error");
@@ -123,29 +130,86 @@ export default function UsersPage() {
   };
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="flex justify-between items-center mb-6">
-        <PageTitle title="Users" subtitle="Manage system users" />
-        <Button onClick={() => setIsDialogOpen(true)}>
-          <PlusIcon className="h-4 w-4 mr-2" />
+    <Box>
+      <Box
+        sx={{
+          mb: 4,
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+        }}
+      >
+        <Box>
+          <Typography
+            variant="h4"
+            component="h1"
+            gutterBottom
+            fontWeight="bold"
+          >
+            Users
+          </Typography>
+          <Typography variant="subtitle1" color="text.secondary">
+            Manage system users
+          </Typography>
+        </Box>
+        <Button
+          variant="contained"
+          startIcon={<AddIcon />}
+          onClick={() => setIsDialogOpen(true)}
+        >
           Add User
         </Button>
-      </div>
+      </Box>
 
-      <div className="mb-6">
-        <UserSearch onSearch={handleSearch} isLoading={loading} />
-      </div>
+      <Paper
+        elevation={2}
+        sx={{
+          p: 3,
+          mb: 3,
+          borderRadius: 2,
+        }}
+      >
+        <TextField
+          placeholder="Search users..."
+          variant="outlined"
+          size="small"
+          fullWidth
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon fontSize="small" />
+              </InputAdornment>
+            ),
+          }}
+        />
+      </Paper>
 
-      <UsersTable
-        data={data}
-        loading={loading}
-        totalRows={totalRows}
-        perPage={perPage}
-        setPerPage={setPerPage}
-        fetchUsers={fetchUsers}
-        onEdit={handleEdit}
-        onDelete={handleDelete}
-      />
+      <Paper
+        elevation={2}
+        sx={{
+          borderRadius: 2,
+          overflow: "hidden",
+        }}
+      >
+        {loading && data.length === 0 ? (
+          <Box sx={{ display: "flex", justifyContent: "center", p: 4 }}>
+            <CircularProgress />
+          </Box>
+        ) : (
+          <UsersTable
+            data={filteredData}
+            loading={loading}
+            totalRows={totalRows}
+            perPage={perPage}
+            setPerPage={setPerPage}
+            fetchUsers={fetchUsers}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+          />
+        )}
+      </Paper>
 
       <UserDialog
         open={isDialogOpen}
@@ -155,8 +219,8 @@ export default function UsersPage() {
         }}
         user={selectedUser}
         onSave={handleSave}
-        refreshData={() => fetchUsers(1)}
+        refreshData={() => fetchUsers()}
       />
-    </div>
+    </Box>
   );
 }

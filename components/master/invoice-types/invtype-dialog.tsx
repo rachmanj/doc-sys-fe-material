@@ -1,20 +1,24 @@
+"use client";
+
 import { useState, useEffect } from "react";
 import { getCookie } from "@/lib/cookies";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { getApiEndpoint } from "@/lib/api";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import * as z from "zod";
 import { InvoiceType } from "@/types/invoice-type";
-import { showToast } from "@/lib/toast";
+import Swal from "sweetalert2";
+import { useAppTheme } from "@/components/theme/ThemeProvider";
+
+// Material UI imports
+import Dialog from "@mui/material/Dialog";
+import DialogActions from "@mui/material/DialogActions";
+import DialogContent from "@mui/material/DialogContent";
+import DialogTitle from "@mui/material/DialogTitle";
+import Button from "@mui/material/Button";
+import TextField from "@mui/material/TextField";
+import Grid from "@mui/material/Grid";
+import CircularProgress from "@mui/material/CircularProgress";
 
 interface InvoiceTypeDialogProps {
   open: boolean;
@@ -37,42 +41,49 @@ export default function InvoiceTypeDialog({
   onSave,
   refreshData,
 }: InvoiceTypeDialogProps) {
+  const { mode } = useAppTheme();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const form = useForm<InvoiceTypeFormValues>({
+  const {
+    control,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<InvoiceTypeFormValues>({
     resolver: zodResolver(invoiceTypeFormSchema),
     defaultValues: {
       type_name: "",
     },
   });
 
+  // Update form when invoiceType changes
   useEffect(() => {
-    if (open) {
-      if (invoiceType) {
-        form.reset({
-          type_name: invoiceType.type_name,
-        });
-      } else {
-        form.reset({
-          type_name: "",
-        });
-      }
+    if (invoiceType) {
+      reset({
+        type_name: invoiceType.type_name,
+      });
+    } else {
+      reset({
+        type_name: "",
+      });
     }
-  }, [invoiceType, form, open]);
+  }, [invoiceType, reset]);
 
   const onSubmit = async (data: InvoiceTypeFormValues) => {
+    setIsSubmitting(true);
     try {
-      setIsSubmitting(true);
       const token = getCookie("token");
-      const url = `${
-        process.env.NEXT_PUBLIC_BACKEND_URL
-      }/api/master/invoice-types${invoiceType ? `/${invoiceType.id}` : ""}`;
+      const url = invoiceType
+        ? `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/master/invoice-types/${invoiceType.id}`
+        : `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/master/invoice-types`;
+      const method = invoiceType ? "PUT" : "POST";
 
       const response = await fetch(url, {
-        method: invoiceType ? "PUT" : "POST",
+        method,
         headers: {
-          Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
         },
         body: JSON.stringify(data),
       });
@@ -83,21 +94,24 @@ export default function InvoiceTypeDialog({
         throw new Error(result.message || "Failed to save invoice type");
       }
 
-      if (result.success) {
-        showToast.success({
-          message: invoiceType
-            ? "Invoice type updated successfully"
-            : "Invoice type created successfully",
-        });
-        form.reset();
-        onSave(result.data);
-        onOpenChange(false);
-      }
+      Swal.fire({
+        icon: "success",
+        title: "Success",
+        text: invoiceType
+          ? "Invoice type updated successfully"
+          : "Invoice type created successfully",
+        timer: 1500,
+      });
+
+      onSave(result.data);
+      onOpenChange(false);
+      refreshData();
     } catch (error) {
-      console.error("Error:", error);
-      showToast.error({
-        message:
-          error instanceof Error ? error.message : "Something went wrong",
+      console.error("Error saving invoice type:", error);
+      Swal.fire({
+        icon: "error",
+        title: "Error",
+        text: "Failed to save invoice type",
       });
     } finally {
       setIsSubmitting(false);
@@ -105,43 +119,57 @@ export default function InvoiceTypeDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>
-            {invoiceType ? "Edit Invoice Type" : "Create Invoice Type"}
-          </DialogTitle>
-        </DialogHeader>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="type_name">Type Name</Label>
-            <Input
-              {...form.register("type_name")}
-              id="type_name"
-              placeholder="Enter type name"
-            />
-            {form.formState.errors.type_name && (
-              <p className="text-sm text-red-500">
-                {form.formState.errors.type_name.message}
-              </p>
-            )}
-          </div>
-
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={isSubmitting}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? "Saving..." : invoiceType ? "Update" : "Create"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
+    <Dialog
+      open={open}
+      onClose={() => onOpenChange(false)}
+      fullWidth
+      maxWidth="sm"
+    >
+      <DialogTitle>
+        {invoiceType ? "Edit Invoice Type" : "Add New Invoice Type"}
+      </DialogTitle>
+      <form onSubmit={handleSubmit(onSubmit)}>
+        <DialogContent>
+          <Grid container spacing={2}>
+            <Grid item xs={12}>
+              <Controller
+                name="type_name"
+                control={control}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    label="Type Name"
+                    fullWidth
+                    margin="normal"
+                    required
+                    error={!!errors.type_name}
+                    helperText={errors.type_name?.message}
+                    disabled={isSubmitting}
+                    autoFocus
+                  />
+                )}
+              />
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button
+            onClick={() => onOpenChange(false)}
+            disabled={isSubmitting}
+            variant="outlined"
+          >
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            variant="contained"
+            disabled={isSubmitting}
+            startIcon={isSubmitting ? <CircularProgress size={20} /> : null}
+          >
+            {isSubmitting ? "Saving..." : "Save"}
+          </Button>
+        </DialogActions>
+      </form>
     </Dialog>
   );
 }

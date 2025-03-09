@@ -1,23 +1,66 @@
 "use client";
 
+import { use, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import EditInvoice from "@/components/documents/invoices/edit-invoice";
-import { use } from "react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { ArrowLeft } from "lucide-react";
+import { useAppTheme } from "@/components/theme/ThemeProvider";
 import InvoiceAttachments from "@/components/documents/invoices/invoice-attachments";
+
+// Material UI imports
+import Box from "@mui/material/Box";
+import Typography from "@mui/material/Typography";
+import Button from "@mui/material/Button";
+import Tabs from "@mui/material/Tabs";
+import Tab from "@mui/material/Tab";
+import Paper from "@mui/material/Paper";
+import Card from "@mui/material/Card";
+import CardContent from "@mui/material/CardContent";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+
+interface TabPanelProps {
+  children?: React.ReactNode;
+  index: number;
+  value: number;
+}
+
+function TabPanel(props: TabPanelProps) {
+  const { children, value, index, ...other } = props;
+
+  return (
+    <div
+      role="tabpanel"
+      hidden={value !== index}
+      id={`invoice-edit-tabpanel-${index}`}
+      aria-labelledby={`invoice-edit-tab-${index}`}
+      {...other}
+    >
+      {value === index && <Box sx={{ pt: 3 }}>{children}</Box>}
+    </div>
+  );
+}
+
+function a11yProps(index: number) {
+  return {
+    id: `invoice-edit-tab-${index}`,
+    "aria-controls": `invoice-edit-tabpanel-${index}`,
+  };
+}
 
 export default function EditInvoicePage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const { mode } = useAppTheme();
   const router = useRouter();
   const searchParams = useSearchParams();
   const resolvedParams = use(params);
   const invoiceId = parseInt(resolvedParams.id);
+  const [tabValue, setTabValue] = useState(0);
+
+  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+    setTabValue(newValue);
+  };
 
   const handleReturn = () => {
     router.push("/documents/invoices?tab=list");
@@ -25,43 +68,76 @@ export default function EditInvoicePage({
   };
 
   return (
-    <div className="container mx-auto py-6">
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Edit Invoice</h1>
-        <Button variant="ghost" onClick={handleReturn} type="button">
-          <ArrowLeft className="h-4 w-4 mr-2" />
+    <Box sx={{ mb: 4 }}>
+      <Box
+        sx={{
+          mb: 4,
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+        }}
+      >
+        <Typography variant="h4" component="h1" fontWeight="bold">
+          Edit Invoice
+        </Typography>
+        <Button
+          variant="outlined"
+          startIcon={<ArrowBackIcon />}
+          onClick={handleReturn}
+        >
           Back to Invoices
         </Button>
-      </div>
+      </Box>
 
-      <Tabs defaultValue="detail" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="detail">Detail</TabsTrigger>
-          <TabsTrigger value="distribution">Distribution</TabsTrigger>
-          <TabsTrigger value="attachments">Attachments</TabsTrigger>
-        </TabsList>
+      <Paper elevation={2} sx={{ borderRadius: 2 }}>
+        <Box sx={{ borderBottom: 1, borderColor: "divider", px: 2 }}>
+          <Tabs
+            value={tabValue}
+            onChange={handleTabChange}
+            aria-label="invoice edit tabs"
+          >
+            <Tab label="Detail" {...a11yProps(0)} />
+            <Tab label="Distribution" {...a11yProps(1)} />
+            <Tab label="Attachments" {...a11yProps(2)} />
+          </Tabs>
+        </Box>
 
-        <TabsContent value="detail">
+        <TabPanel value={tabValue} index={0}>
           <EditInvoice
             invoiceId={invoiceId}
             onSuccess={handleReturn}
             onCancel={handleReturn}
           />
-        </TabsContent>
+        </TabPanel>
 
-        <TabsContent value="distribution">
-          <Card className="p-6">
-            <h2 className="text-lg font-semibold mb-4">
-              Distribution Information
-            </h2>
-            {/* Distribution content will go here */}
+        <TabPanel value={tabValue} index={1}>
+          <Card sx={{ borderRadius: 2 }}>
+            <CardContent sx={{ p: 3 }}>
+              <Typography variant="h6" gutterBottom>
+                Distribution Information
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+                Distribution information will be available in a future update.
+              </Typography>
+            </CardContent>
           </Card>
-        </TabsContent>
+        </TabPanel>
 
-        <TabsContent value="attachments">
-          <InvoiceAttachments invoiceId={invoiceId} />
-        </TabsContent>
-      </Tabs>
-    </div>
+        <TabPanel value={tabValue} index={2}>
+          <Card sx={{ borderRadius: 2 }}>
+            <CardContent sx={{ p: 3 }}>
+              <Typography variant="h6" gutterBottom>
+                Attachments
+              </Typography>
+              {invoiceId && (
+                <Box sx={{ mt: 2 }}>
+                  <InvoiceAttachments invoiceId={invoiceId} />
+                </Box>
+              )}
+            </CardContent>
+          </Card>
+        </TabPanel>
+      </Paper>
+    </Box>
   );
 }

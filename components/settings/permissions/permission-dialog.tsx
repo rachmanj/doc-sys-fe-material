@@ -35,17 +35,15 @@ interface Permission {
 
 interface PermissionDialogProps {
   open: boolean;
-  setOpen: (open: boolean) => void;
+  onOpenChange: (open: boolean) => void;
   permission: Permission | null;
-  onClose: () => void;
   onSuccess: () => void;
 }
 
 export function PermissionDialog({
   open,
-  setOpen,
+  onOpenChange,
   permission,
-  onClose,
   onSuccess,
 }: PermissionDialogProps) {
   const [loading, setLoading] = useState(false);
@@ -108,8 +106,12 @@ export function PermissionDialog({
     }
   }
 
+  const handleCancel = () => {
+    onOpenChange(false);
+  };
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>
@@ -132,7 +134,7 @@ export function PermissionDialog({
               )}
             />
             <div className="flex justify-end space-x-2">
-              <Button variant="outline" onClick={onClose}>
+              <Button variant="outline" onClick={handleCancel}>
                 Cancel
               </Button>
               <Button type="submit" disabled={loading}>

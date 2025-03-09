@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import { Toaster } from "@/components/ui/toaster";
 import { Navbar } from "@/components/layout/navbar";
 import { Footer } from "@/components/layout/footer";
+import Box from "@mui/material/Box";
+import Container from "@mui/material/Container";
+import { useAppTheme } from "@/components/theme/ThemeProvider";
 
 export default function ProtectedLayout({
   children,
@@ -12,6 +15,7 @@ export default function ProtectedLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
+  const { mode } = useAppTheme();
 
   useEffect(() => {
     // Check if user is authenticated by verifying token exists
@@ -22,11 +26,29 @@ export default function ProtectedLayout({
   }, [router]);
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <Box
+      sx={{
+        display: "flex",
+        flexDirection: "column",
+        minHeight: "100vh",
+        bgcolor: "background.default",
+        color: "text.primary",
+      }}
+    >
       <Navbar />
-      <main className="flex-grow container mx-auto px-4 py-8">{children}</main>
+      <Container
+        component="main"
+        maxWidth="lg"
+        sx={{
+          flexGrow: 1,
+          py: 3,
+          mt: 6,
+        }}
+      >
+        {children}
+      </Container>
       <Footer />
       <Toaster />
-    </div>
+    </Box>
   );
 }

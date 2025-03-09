@@ -3,62 +3,71 @@
 import { useAuth } from "@/hooks/use-auth";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { PageTitle } from "@/components/ui/page-title";
-import InvoiceTypeTable from "@/components/master/invoice-types/invtype-table";
 import InvoiceTypeDialog from "@/components/master/invoice-types/invtype-dialog";
-import InvoiceTypeSearch from "@/components/master/invoice-types/invtype-search";
-import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
 import { getCookie } from "@/lib/cookies";
+import { getApiEndpoint } from "@/lib/api";
 import { InvoiceType } from "@/types/invoice-type";
-import { showToast } from "@/lib/toast";
 import Swal from "sweetalert2";
+import { useAppTheme } from "@/components/theme/ThemeProvider";
 
-interface SearchParams {
-  page?: number;
-  per_page?: number;
-  type_name?: string;
-}
+// Material UI imports
+import Box from "@mui/material/Box";
+import Typography from "@mui/material/Typography";
+import Button from "@mui/material/Button";
+import Paper from "@mui/material/Paper";
+import TextField from "@mui/material/TextField";
+import Table from "@mui/material/Table";
+import TableBody from "@mui/material/TableBody";
+import TableCell from "@mui/material/TableCell";
+import TableContainer from "@mui/material/TableContainer";
+import TableHead from "@mui/material/TableHead";
+import TableRow from "@mui/material/TableRow";
+import TablePagination from "@mui/material/TablePagination";
+import IconButton from "@mui/material/IconButton";
+import Tooltip from "@mui/material/Tooltip";
+import CircularProgress from "@mui/material/CircularProgress";
+import InputAdornment from "@mui/material/InputAdornment";
+
+// Icons
+import AddIcon from "@mui/icons-material/Add";
+import EditIcon from "@mui/icons-material/Edit";
+import DeleteIcon from "@mui/icons-material/Delete";
+import SearchIcon from "@mui/icons-material/Search";
+import ClearIcon from "@mui/icons-material/Clear";
 
 export default function InvoiceTypesPage() {
   const { user, hasPermission } = useAuth();
   const router = useRouter();
+  const { mode } = useAppTheme();
   const [isLoading, setIsLoading] = useState(true);
-  const [data, setData] = useState<InvoiceType[]>([]);
+  const [invoiceTypes, setInvoiceTypes] = useState<InvoiceType[]>([]);
+  const [filteredInvoiceTypes, setFilteredInvoiceTypes] = useState<
+    InvoiceType[]
+  >([]);
   const [totalRows, setTotalRows] = useState(0);
   const [perPage, setPerPage] = useState(10);
+  const [page, setPage] = useState(0);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedInvoiceType, setSelectedInvoiceType] = useState<
     InvoiceType | undefined
   >();
-  const [currentPage, setCurrentPage] = useState(1);
-  const [paginationData, setPaginationData] = useState({
-    lastPage: 1,
-    links: [],
-    from: 0,
-    to: 0,
-  });
-  const [searchParams, setSearchParams] = useState<SearchParams>({});
+  const [searchQuery, setSearchQuery] = useState("");
 
-  const fetchInvoiceTypes = async (params: SearchParams = {}) => {
+  const fetchInvoiceTypes = async () => {
     try {
       setIsLoading(true);
       const token = getCookie("token");
+
+      // Create query params for search
       const queryParams = new URLSearchParams();
-
-      Object.entries(params).forEach(([key, value]) => {
-        if (value) queryParams.append(key, value.toString());
-      });
-
-      if (!params.per_page) {
-        queryParams.append("per_page", perPage.toString());
-      }
+      queryParams.append("per_page", "100");
 
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/master/invoice-types/search?${queryParams}`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
+            Accept: "application/json",
           },
         }
       );
@@ -68,28 +77,47 @@ export default function InvoiceTypesPage() {
       }
 
       const result = await response.json();
-      setData(result.data.data);
-      setTotalRows(result.data.total);
-      setCurrentPage(result.data.current_page);
-      setPaginationData({
-        lastPage: result.data.last_page,
-        links: result.data.links,
-        from: result.data.from,
-        to: result.data.to,
-      });
+      setInvoiceTypes(result.data.data);
+      setFilteredInvoiceTypes(result.data.data);
+      setTotalRows(result.data.data.length);
     } catch (error) {
       console.error("Error fetching invoice types:", error);
-      showToast.error({
-        message: "Failed to fetch invoice types",
+      Swal.fire({
+        icon: "error",
+        title: "Error",
+        text: "Failed to fetch invoice types",
       });
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleSearch = (params: SearchParams) => {
-    setSearchParams(params);
-    fetchInvoiceTypes({ ...params, page: 1 });
+  useEffect(() => {
+    fetchInvoiceTypes();
+  }, []);
+
+  // Filter invoice types when search query changes
+  useEffect(() => {
+    if (searchQuery.trim() === "") {
+      setFilteredInvoiceTypes(invoiceTypes);
+      setTotalRows(invoiceTypes.length);
+    } else {
+      const lowercaseQuery = searchQuery.toLowerCase();
+      const filtered = invoiceTypes.filter((invoiceType) =>
+        invoiceType.type_name.toLowerCase().includes(lowercaseQuery)
+      );
+      setFilteredInvoiceTypes(filtered);
+      setTotalRows(filtered.length);
+    }
+    setPage(0); // Reset to first page when filtering
+  }, [searchQuery, invoiceTypes]);
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchQuery(e.target.value);
+  };
+
+  const handleClearSearch = () => {
+    setSearchQuery("");
   };
 
   const handleEdit = (invoiceType: InvoiceType) => {
@@ -103,8 +131,8 @@ export default function InvoiceTypesPage() {
       text: "You won't be able to revert this!",
       icon: "warning",
       showCancelButton: true,
-      confirmButtonColor: "#3085d6",
-      cancelButtonColor: "#d33",
+      confirmButtonColor: "#d33",
+      cancelButtonColor: "#3085d6",
       confirmButtonText: "Yes, delete it!",
     });
 
@@ -117,87 +145,184 @@ export default function InvoiceTypesPage() {
             method: "DELETE",
             headers: {
               Authorization: `Bearer ${token}`,
+              Accept: "application/json",
             },
           }
         );
 
         if (response.ok) {
-          showToast.success({
-            message: "Invoice type deleted successfully",
-          });
-          fetchInvoiceTypes(searchParams);
+          Swal.fire("Deleted!", "Invoice type has been deleted.", "success");
+          fetchInvoiceTypes();
         } else {
           throw new Error("Failed to delete invoice type");
         }
       } catch (error) {
         console.error("Error deleting invoice type:", error);
-        showToast.error({
-          message: "Failed to delete invoice type",
-        });
+        Swal.fire("Error!", "Failed to delete invoice type.", "error");
       }
     }
   };
 
   const handleSave = (savedInvoiceType: InvoiceType) => {
-    setData((currentData) =>
-      currentData.map((item) =>
-        item.id === savedInvoiceType.id ? savedInvoiceType : item
-      )
-    );
+    fetchInvoiceTypes(); // Refresh data to ensure consistency
   };
 
-  const handleCreate = (newInvoiceType: InvoiceType) => {
-    setData((currentData) => [newInvoiceType, ...currentData]);
-    setTotalRows((prev) => prev + 1);
+  const handlePageChange = (
+    event: React.MouseEvent<HTMLButtonElement> | null,
+    newPage: number
+  ) => {
+    setPage(newPage);
   };
 
-  useEffect(() => {
-    fetchInvoiceTypes();
-  }, [perPage]);
+  const handlePerRowsChange = (
+    event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => {
+    setPerPage(parseInt(event.target.value, 10));
+    setPage(0);
+  };
+
+  // Get current page of data
+  const getCurrentPageData = () => {
+    const startIndex = page * perPage;
+    const endIndex = startIndex + perPage;
+    return filteredInvoiceTypes.slice(startIndex, endIndex);
+  };
 
   return (
-    <div className="space-y-4">
-      <PageTitle title="Invoice Types" subtitle="Manage invoice types" />
+    <Box>
+      <Box sx={{ mb: 4 }}>
+        <Typography variant="h4" component="h1" gutterBottom fontWeight="bold">
+          Invoice Types
+        </Typography>
+        <Typography variant="subtitle1" color="text.secondary">
+          Manage invoice types
+        </Typography>
+      </Box>
 
-      <div className="flex justify-between items-center">
-        <div className="w-1/3">
-          <InvoiceTypeSearch onSearch={handleSearch} isLoading={isLoading} />
-        </div>
-        <Button
-          onClick={() => {
-            setSelectedInvoiceType(undefined);
-            setDialogOpen(true);
+      <Paper elevation={2} sx={{ p: 3, mb: 3, borderRadius: 2 }}>
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
           }}
         >
-          <Plus className="w-4 h-4 mr-2" />
-          Add Invoice Type
-        </Button>
-      </div>
+          <TextField
+            placeholder="Search invoice types..."
+            variant="outlined"
+            size="small"
+            value={searchQuery}
+            onChange={handleSearchChange}
+            sx={{ width: "300px" }}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" />
+                </InputAdornment>
+              ),
+              endAdornment: searchQuery && (
+                <InputAdornment position="end">
+                  <IconButton
+                    size="small"
+                    onClick={handleClearSearch}
+                    edge="end"
+                    aria-label="clear search"
+                  >
+                    <ClearIcon fontSize="small" />
+                  </IconButton>
+                </InputAdornment>
+              ),
+            }}
+          />
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => {
+              setSelectedInvoiceType(undefined);
+              setDialogOpen(true);
+            }}
+          >
+            Add Invoice Type
+          </Button>
+        </Box>
+      </Paper>
 
-      <InvoiceTypeTable
-        data={data}
-        loading={isLoading}
-        totalRows={totalRows}
-        perPage={perPage}
-        currentPage={currentPage}
-        lastPage={paginationData.lastPage}
-        paginationLinks={paginationData.links}
-        from={paginationData.from}
-        to={paginationData.to}
-        setPerPage={setPerPage}
-        fetchInvoiceTypes={fetchInvoiceTypes}
-        onEdit={handleEdit}
-        onDelete={handleDelete}
-        searchParams={searchParams}
-      />
+      <Paper elevation={2} sx={{ borderRadius: 2, overflow: "hidden" }}>
+        <TableContainer>
+          <Table sx={{ minWidth: 650 }} aria-label="invoice types table">
+            <TableHead>
+              <TableRow>
+                <TableCell>ID</TableCell>
+                <TableCell>Type Name</TableCell>
+                <TableCell align="right">Actions</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {isLoading ? (
+                <TableRow key="loading-row">
+                  <TableCell colSpan={3} align="center" sx={{ py: 3 }}>
+                    <CircularProgress size={30} />
+                  </TableCell>
+                </TableRow>
+              ) : filteredInvoiceTypes.length === 0 ? (
+                <TableRow key="empty-row">
+                  <TableCell colSpan={3} align="center" sx={{ py: 3 }}>
+                    <Typography variant="body1">
+                      No invoice types found
+                    </Typography>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                getCurrentPageData().map((invoiceType) => (
+                  <TableRow key={invoiceType.id} hover>
+                    <TableCell>{invoiceType.id}</TableCell>
+                    <TableCell>{invoiceType.type_name}</TableCell>
+                    <TableCell align="right">
+                      <Tooltip title="Edit invoice type">
+                        <IconButton
+                          aria-label="edit"
+                          onClick={() => handleEdit(invoiceType)}
+                          size="small"
+                          color="primary"
+                        >
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Delete invoice type">
+                        <IconButton
+                          aria-label="delete"
+                          onClick={() => handleDelete(invoiceType)}
+                          size="small"
+                          color="error"
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+        <TablePagination
+          component="div"
+          count={totalRows}
+          page={page}
+          onPageChange={handlePageChange}
+          rowsPerPage={perPage}
+          onRowsPerPageChange={handlePerRowsChange}
+          rowsPerPageOptions={[5, 10, 25, 50]}
+        />
+      </Paper>
 
       <InvoiceTypeDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         invoiceType={selectedInvoiceType}
-        onSave={selectedInvoiceType ? handleSave : handleCreate}
+        onSave={handleSave}
         refreshData={fetchInvoiceTypes}
       />
-    </div>
+    </Box>
   );
 }

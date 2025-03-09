@@ -1,14 +1,33 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Loader2, File, Trash2, Upload, Eye } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
 import { getCookie } from "@/lib/cookies";
-import { showToast } from "@/lib/toast";
-import { cn } from "@/lib/utils";
 import Swal from "sweetalert2";
+import { useAppTheme } from "@/components/theme/ThemeProvider";
+
+// Material UI imports
+import Box from "@mui/material/Box";
+import Paper from "@mui/material/Paper";
+import Typography from "@mui/material/Typography";
+import Button from "@mui/material/Button";
+import Grid from "@mui/material/Grid";
+import Card from "@mui/material/Card";
+import CardContent from "@mui/material/CardContent";
+import CardMedia from "@mui/material/CardMedia";
+import CardActions from "@mui/material/CardActions";
+import IconButton from "@mui/material/IconButton";
+import CircularProgress from "@mui/material/CircularProgress";
+import Tooltip from "@mui/material/Tooltip";
+import Divider from "@mui/material/Divider";
+
+// Icons
+import UploadFileIcon from "@mui/icons-material/UploadFile";
+import DeleteIcon from "@mui/icons-material/Delete";
+import VisibilityIcon from "@mui/icons-material/Visibility";
+import InsertDriveFileIcon from "@mui/icons-material/InsertDriveFile";
+import PictureAsPdfIcon from "@mui/icons-material/PictureAsPdf";
+import ImageIcon from "@mui/icons-material/Image";
+import DescriptionIcon from "@mui/icons-material/Description";
 
 interface Attachment {
   id: number;
@@ -26,10 +45,12 @@ interface InvoiceAttachmentsProps {
 export default function InvoiceAttachments({
   invoiceId,
 }: InvoiceAttachmentsProps) {
+  const { mode } = useAppTheme();
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchAttachments = async () => {
     try {
@@ -53,7 +74,11 @@ export default function InvoiceAttachments({
       setAttachments(result.data || []);
     } catch (error) {
       console.error("Error fetching attachments:", error);
-      showToast.error({ message: "Failed to load attachments" });
+      Swal.fire({
+        icon: "error",
+        title: "Error",
+        text: "Failed to load attachments",
+      });
     } finally {
       setIsLoading(false);
     }
@@ -98,13 +123,22 @@ export default function InvoiceAttachments({
       if (result.success) {
         // Fetch updated attachments list
         await fetchAttachments();
-        showToast.success({ message: result.message });
+        Swal.fire({
+          icon: "success",
+          title: "Success",
+          text: result.message,
+          timer: 1500,
+        });
       }
 
       e.target.value = "";
     } catch (error) {
       console.error("Upload error:", error);
-      showToast.error({ message: "Failed to upload files" });
+      Swal.fire({
+        icon: "error",
+        title: "Error",
+        text: "Failed to upload files",
+      });
     } finally {
       setIsUploading(false);
     }
@@ -145,10 +179,19 @@ export default function InvoiceAttachments({
       console.log("Delete response:", deleteResult);
 
       setAttachments((prev) => prev.filter((att) => att.id !== id));
-      showToast.success({ message: "File deleted successfully" });
+      Swal.fire({
+        icon: "success",
+        title: "Success",
+        text: "File deleted successfully",
+        timer: 1500,
+      });
     } catch (error) {
       console.error("Delete error:", error);
-      showToast.error({ message: "Failed to delete file" });
+      Swal.fire({
+        icon: "error",
+        title: "Error",
+        text: "Failed to delete file",
+      });
     } finally {
       setIsDeleting(false);
     }
@@ -164,116 +207,155 @@ export default function InvoiceAttachments({
     return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
   };
 
+  const getFileIcon = (mimeType: string) => {
+    if (mimeType.startsWith("image/")) {
+      return <ImageIcon fontSize="large" color="primary" />;
+    } else if (mimeType === "application/pdf") {
+      return <PictureAsPdfIcon fontSize="large" color="error" />;
+    } else if (
+      mimeType ===
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+      mimeType === "application/msword"
+    ) {
+      return <DescriptionIcon fontSize="large" color="primary" />;
+    } else if (
+      mimeType ===
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+      mimeType === "application/vnd.ms-excel"
+    ) {
+      return <InsertDriveFileIcon fontSize="large" color="success" />;
+    } else {
+      return <InsertDriveFileIcon fontSize="large" />;
+    }
+  };
+
   return (
-    <Card className="p-6">
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-lg font-semibold">Invoice Attachments</h2>
-        <div className="flex items-center gap-2">
-          <Input
+    <Paper elevation={2} sx={{ p: 3, borderRadius: 2 }}>
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          mb: 3,
+        }}
+      >
+        <Typography variant="h6">Invoice Attachments</Typography>
+        <Box>
+          <input
             type="file"
             multiple
-            className="hidden"
+            style={{ display: "none" }}
             id="file-upload"
+            ref={fileInputRef}
             onChange={handleFileUpload}
             accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx"
           />
-          <label htmlFor="file-upload">
-            <Button
-              variant="outline"
-              className={cn(
-                "cursor-pointer transition-all",
-                isUploading && "animate-pulse"
-              )}
-              disabled={isUploading}
-              asChild
-            >
-              <span>
-                {isUploading ? (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                ) : (
-                  <Upload className="w-4 h-4 mr-2" />
-                )}
-                Upload Files
-              </span>
-            </Button>
-          </label>
-        </div>
-      </div>
+          <Button
+            variant="contained"
+            component="label"
+            htmlFor="file-upload"
+            startIcon={
+              isUploading ? <CircularProgress size={20} /> : <UploadFileIcon />
+            }
+            disabled={isUploading}
+          >
+            Upload Files
+          </Button>
+        </Box>
+      </Box>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {isLoading ? (
-          <div className="col-span-full flex justify-center py-8">
-            <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-          </div>
-        ) : attachments.length === 0 ? (
-          <div className="col-span-full text-center py-8 text-muted-foreground">
+      <Divider sx={{ mb: 3 }} />
+
+      {isLoading ? (
+        <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+          <CircularProgress />
+        </Box>
+      ) : attachments.length === 0 ? (
+        <Box sx={{ textAlign: "center", py: 4 }}>
+          <Typography variant="body1" color="text.secondary">
             No attachments found
-          </div>
-        ) : (
-          attachments.map((attachment) => (
-            <div
-              key={attachment.id}
-              className={cn(
-                "border rounded-lg p-4 space-y-3",
-                "hover:bg-muted/50 transition-all",
-                isDeleting && "animate-pulse opacity-50"
-              )}
-            >
-              {/* Preview Section */}
-              <div className="aspect-video rounded-md border bg-muted flex items-center justify-center">
-                {attachment.mime_type.startsWith("image/") ? (
-                  <img
-                    src={attachment.file_url}
-                    alt={attachment.original_name}
-                    className="h-full w-full object-cover rounded-md"
-                  />
-                ) : (
-                  <File className="w-12 h-12 text-blue-500" />
-                )}
-              </div>
-
-              {/* File Info */}
-              <div className="space-y-1">
-                <p
-                  className="text-sm font-medium truncate"
-                  title={attachment.original_name}
+          </Typography>
+        </Box>
+      ) : (
+        <Grid container spacing={2}>
+          {attachments.map((attachment) => (
+            <Grid item xs={12} sm={6} md={4} key={attachment.id}>
+              <Card
+                elevation={1}
+                sx={{
+                  height: "100%",
+                  transition: "transform 0.2s",
+                  "&:hover": {
+                    transform: "translateY(-4px)",
+                    boxShadow: 3,
+                  },
+                }}
+              >
+                <CardMedia
+                  sx={{
+                    height: 140,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    bgcolor:
+                      mode === "dark"
+                        ? "rgba(255, 255, 255, 0.05)"
+                        : "rgba(0, 0, 0, 0.03)",
+                  }}
                 >
-                  {attachment.original_name}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {formatFileSize(attachment.size)}
-                </p>
-              </div>
-
-              {/* Actions */}
-              <div className="flex items-center justify-end gap-2">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-blue-500 hover:text-blue-700"
-                  asChild
-                >
-                  <a
-                    href={attachment.file_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  {attachment.mime_type.startsWith("image/") ? (
+                    <img
+                      src={attachment.file_url}
+                      alt={attachment.original_name}
+                      style={{
+                        height: "100%",
+                        width: "100%",
+                        objectFit: "cover",
+                      }}
+                    />
+                  ) : (
+                    getFileIcon(attachment.mime_type)
+                  )}
+                </CardMedia>
+                <CardContent>
+                  <Typography
+                    variant="subtitle2"
+                    noWrap
+                    title={attachment.original_name}
+                    gutterBottom
                   >
-                    <Eye className="w-4 h-4" />
-                  </a>
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-destructive hover:text-destructive/90"
-                  onClick={() => handleDelete(attachment.id)}
-                >
-                  <Trash2 className="w-4 h-4" />
-                </Button>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-    </Card>
+                    {attachment.original_name}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {formatFileSize(attachment.size)}
+                  </Typography>
+                </CardContent>
+                <CardActions sx={{ justifyContent: "flex-end" }}>
+                  <Tooltip title="View">
+                    <IconButton
+                      size="small"
+                      color="primary"
+                      onClick={() => window.open(attachment.file_url, "_blank")}
+                    >
+                      <VisibilityIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title="Delete">
+                    <IconButton
+                      size="small"
+                      color="error"
+                      onClick={() => handleDelete(attachment.id)}
+                      disabled={isDeleting}
+                    >
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                </CardActions>
+              </Card>
+            </Grid>
+          ))}
+        </Grid>
+      )}
+    </Paper>
   );
 }

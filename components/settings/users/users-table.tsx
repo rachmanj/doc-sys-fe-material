@@ -1,10 +1,25 @@
 "use client";
 
-import DataTable from "react-data-table-component";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { User } from "@/types/user";
-import { Pencil as EditIcon, Trash as TrashIcon } from "lucide-react";
 import { getCookie } from "@/lib/cookies";
+
+// Material UI imports
+import Table from "@mui/material/Table";
+import TableBody from "@mui/material/TableBody";
+import TableCell from "@mui/material/TableCell";
+import TableContainer from "@mui/material/TableContainer";
+import TableHead from "@mui/material/TableHead";
+import TableRow from "@mui/material/TableRow";
+import TablePagination from "@mui/material/TablePagination";
+import IconButton from "@mui/material/IconButton";
+import Tooltip from "@mui/material/Tooltip";
+import Chip from "@mui/material/Chip";
+import Box from "@mui/material/Box";
+import Typography from "@mui/material/Typography";
+import EditIcon from "@mui/icons-material/Edit";
+import DeleteIcon from "@mui/icons-material/Delete";
+import { useAppTheme } from "@/components/theme/ThemeProvider";
 
 interface UsersTableProps {
   data: User[];
@@ -12,7 +27,7 @@ interface UsersTableProps {
   totalRows: number;
   perPage: number;
   setPerPage: (perPage: number) => void;
-  fetchUsers: (page: number) => Promise<void>;
+  fetchUsers: () => Promise<void>;
   onEdit: (user: User) => void;
   onDelete: (user: User) => void;
 }
@@ -27,119 +42,150 @@ export default function UsersTable({
   onEdit,
   onDelete,
 }: UsersTableProps) {
-  const customStyles = {
-    headRow: {
-      style: {
-        backgroundColor: "#f9fafb",
-        borderTopWidth: "1px",
-        borderTopColor: "#e5e7eb",
-      },
-    },
-    headCells: {
-      style: {
-        fontSize: "0.875rem",
-        fontWeight: "600",
-        color: "#374151",
-        paddingLeft: "1rem",
-        paddingRight: "1rem",
-      },
-    },
-    rows: {
-      style: {
-        fontSize: "0.875rem",
-        color: "#374151",
-        backgroundColor: "white",
-        borderBottom: "1px solid #e5e7eb",
-      },
-      highlightOnHoverStyle: {
-        backgroundColor: "#f9fafb",
-      },
-    },
-    cells: {
-      style: {
-        paddingLeft: "1rem",
-        paddingRight: "1rem",
-      },
-    },
+  const { mode } = useAppTheme();
+  const [page, setPage] = useState(0);
+
+  const handlePageChange = (
+    event: React.MouseEvent<HTMLButtonElement> | null,
+    newPage: number
+  ) => {
+    setPage(newPage);
   };
 
-  const columns = [
-    {
-      name: "#",
-      selector: (row: User, index: number = 0) => index + 1,
-      width: "70px",
-      alignRight: true,
-    },
-    {
-      name: "Name",
-      selector: (row: User) => row.name,
-      sortable: true,
-    },
-    {
-      name: "Email",
-      selector: (row: User) => row.email,
-      sortable: true,
-    },
-    {
-      name: "NIK",
-      selector: (row: User) => row.nik,
-      sortable: true,
-    },
-    {
-      name: "Project",
-      selector: (row: User) => row.project,
-      sortable: true,
-    },
-    {
-      name: "Role",
-      selector: (row: User) => row.roles?.join(", ") ?? "N/A",
-      sortable: true,
-      cell: (row: User) => (
-        <span className="capitalize">{row.roles?.join(", ") ?? "N/A"}</span>
-      ),
-    },
-    {
-      name: "Actions",
-      cell: (row: User) => (
-        <div className="flex gap-2">
-          <button
-            onClick={() => onEdit(row)}
-            className="p-2 text-blue-600 hover:text-blue-800"
-          >
-            <EditIcon className="w-5 h-5" />
-          </button>
-          <button
-            onClick={() => onDelete(row)}
-            className="p-2 text-red-600 hover:text-red-800"
-          >
-            <TrashIcon className="w-5 h-5" />
-          </button>
-        </div>
-      ),
-      alignRight: true,
-    },
-  ];
-
-  const handlePageChange = (page: number) => {
-    fetchUsers(page);
+  const handlePerRowsChange = (
+    event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => {
+    setPerPage(parseInt(event.target.value, 10));
+    setPage(0);
   };
 
-  const handlePerRowsChange = async (newPerPage: number, page: number) => {
-    setPerPage(newPerPage);
-    fetchUsers(page);
+  const formatDate = (dateString: string | null | undefined) => {
+    if (!dateString) return "-";
+
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return "-"; // Invalid date
+
+      return new Intl.DateTimeFormat("en-US", {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      }).format(date);
+    } catch (error) {
+      console.error("Error formatting date:", error);
+      return "-";
+    }
+  };
+
+  // Get current page of data
+  const getCurrentPageData = () => {
+    const startIndex = page * perPage;
+    const endIndex = startIndex + perPage;
+    return data.slice(startIndex, endIndex);
   };
 
   return (
-    <DataTable
-      columns={columns}
-      data={data}
-      progressPending={loading}
-      pagination
-      paginationServer
-      paginationTotalRows={totalRows}
-      onChangeRowsPerPage={handlePerRowsChange}
-      onChangePage={handlePageChange}
-      customStyles={customStyles}
-    />
+    <>
+      <TableContainer>
+        <Table sx={{ minWidth: 650 }} aria-label="users table">
+          <TableHead>
+            <TableRow>
+              <TableCell>Name</TableCell>
+              <TableCell>Username</TableCell>
+              <TableCell>Email</TableCell>
+              <TableCell>Project / Department</TableCell>
+              <TableCell>Roles</TableCell>
+              <TableCell>Created</TableCell>
+              <TableCell align="right">Actions</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {data.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={7} align="center">
+                  <Typography variant="body1" sx={{ py: 2 }}>
+                    No users found
+                  </Typography>
+                </TableCell>
+              </TableRow>
+            ) : (
+              getCurrentPageData().map((user) => (
+                <TableRow key={user.id} hover>
+                  <TableCell>{user.name}</TableCell>
+                  <TableCell>{user.username}</TableCell>
+                  <TableCell>{user.email}</TableCell>
+                  <TableCell>
+                    <Box>
+                      {user.project && (
+                        <Typography variant="body2">{user.project}</Typography>
+                      )}
+                      {user.department && (
+                        <Typography variant="caption" color="text.secondary">
+                          {typeof user.department === "string"
+                            ? user.department
+                            : user.department.name}
+                        </Typography>
+                      )}
+                      {!user.project && !user.department && "-"}
+                    </Box>
+                  </TableCell>
+                  <TableCell>
+                    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                      {user.roles && user.roles.length > 0 ? (
+                        user.roles.map((role, index) => (
+                          <Chip
+                            key={index}
+                            label={role}
+                            size="small"
+                            color="primary"
+                            variant="outlined"
+                          />
+                        ))
+                      ) : (
+                        <Typography variant="caption" color="text.secondary">
+                          No roles
+                        </Typography>
+                      )}
+                    </Box>
+                  </TableCell>
+                  <TableCell>{formatDate(user.created_at)}</TableCell>
+                  <TableCell align="right">
+                    <Tooltip title="Edit user">
+                      <IconButton
+                        aria-label="edit"
+                        onClick={() => onEdit(user)}
+                        size="small"
+                        color="primary"
+                      >
+                        <EditIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Delete user">
+                      <IconButton
+                        aria-label="delete"
+                        onClick={() => onDelete(user)}
+                        size="small"
+                        color="error"
+                      >
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </TableContainer>
+      <TablePagination
+        component="div"
+        count={totalRows}
+        page={page}
+        onPageChange={handlePageChange}
+        rowsPerPage={perPage}
+        onRowsPerPageChange={handlePerRowsChange}
+        rowsPerPageOptions={[5, 10, 25, 50]}
+      />
+    </>
   );
 }

@@ -1,7 +1,12 @@
+"use client";
+
 import { useState } from "react";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { SearchIcon } from "lucide-react";
+import TextField from "@mui/material/TextField";
+import Button from "@mui/material/Button";
+import Box from "@mui/material/Box";
+import InputAdornment from "@mui/material/InputAdornment";
+import SearchIcon from "@mui/icons-material/Search";
+import Stack from "@mui/material/Stack";
 
 interface UserSearchProps {
   onSearch: (query: string) => void;
@@ -22,31 +27,44 @@ export default function UserSearch({ onSearch, isLoading }: UserSearchProps) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex gap-2">
-      <div className="relative flex-1">
-        <SearchIcon className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-        <Input
+    <Box component="form" onSubmit={handleSubmit}>
+      <Stack direction="row" spacing={2}>
+        <TextField
+          fullWidth
           type="search"
           placeholder="Search users..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="pl-8"
           disabled={isLoading}
+          size="small"
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon fontSize="small" />
+              </InputAdornment>
+            ),
+          }}
         />
-      </div>
-      <Button type="submit" disabled={isLoading}>
-        Search
-      </Button>
-      {searchQuery && (
         <Button
-          type="button"
-          variant="outline"
-          onClick={handleClear}
+          type="submit"
+          variant="contained"
           disabled={isLoading}
+          sx={{ minWidth: "100px" }}
         >
-          Clear
+          Search
         </Button>
-      )}
-    </form>
+        {searchQuery && (
+          <Button
+            type="button"
+            variant="outlined"
+            onClick={handleClear}
+            disabled={isLoading}
+            sx={{ minWidth: "100px" }}
+          >
+            Clear
+          </Button>
+        )}
+      </Stack>
+    </Box>
   );
 }

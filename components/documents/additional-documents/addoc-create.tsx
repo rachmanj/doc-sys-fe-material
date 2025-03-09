@@ -1,45 +1,34 @@
 "use client";
 
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Button } from "@/components/ui/button";
-import { useForm } from "react-hook-form";
+import { useEffect, useState } from "react";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { showToast } from "@/lib/toast";
-import { Card } from "@/components/ui/card";
-import { Loader2 } from "lucide-react";
-import { useEffect, useState } from "react";
 import { getCookie } from "@/lib/cookies";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Check, ChevronsUpDown } from "lucide-react";
-import { cn } from "@/lib/utils";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-} from "@/components/ui/command";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { toast } from "react-toastify";
+import { useAppTheme } from "@/components/theme/ThemeProvider";
+
+// Material UI imports
+import Box from "@mui/material/Box";
+import Paper from "@mui/material/Paper";
+import Grid from "@mui/material/Grid";
+import Typography from "@mui/material/Typography";
+import TextField from "@mui/material/TextField";
+import Button from "@mui/material/Button";
+import FormControl from "@mui/material/FormControl";
+import FormHelperText from "@mui/material/FormHelperText";
+import InputLabel from "@mui/material/InputLabel";
+import Select from "@mui/material/Select";
+import MenuItem from "@mui/material/MenuItem";
+import CircularProgress from "@mui/material/CircularProgress";
+import Divider from "@mui/material/Divider";
+import Card from "@mui/material/Card";
+import CardContent from "@mui/material/CardContent";
+import Autocomplete from "@mui/material/Autocomplete";
+
+// Icons
+import CloudUploadIcon from "@mui/icons-material/CloudUpload";
+import SaveIcon from "@mui/icons-material/Save";
 
 interface DocumentType {
   id: number;
@@ -63,10 +52,11 @@ interface AddocCreateProps {
 }
 
 export const AddocCreate = ({ onSuccess }: AddocCreateProps) => {
+  const { mode } = useAppTheme();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingTypes, setIsLoadingTypes] = useState(false);
   const [documentTypes, setDocumentTypes] = useState<DocumentType[]>([]);
-  const [openDocType, setOpenDocType] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -98,9 +88,7 @@ export const AddocCreate = ({ onSuccess }: AddocCreateProps) => {
       setDocumentTypes(result.data || []);
     } catch (error) {
       console.error("Error fetching document types:", error);
-      showToast.error({
-        message: "Failed to load document types",
-      });
+      toast.error("Failed to load document types");
     } finally {
       setIsLoadingTypes(false);
     }
@@ -110,12 +98,20 @@ export const AddocCreate = ({ onSuccess }: AddocCreateProps) => {
     fetchDocumentTypes();
   }, []);
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setSelectedFile(file);
+      form.setValue("file", file, { shouldValidate: true });
+    }
+  };
+
   const handleSubmit = async (values: FormValues) => {
     try {
       setIsSubmitting(true);
       const formData = new FormData();
       Object.entries(values).forEach(([key, value]) => {
-        if (key === "file") {
+        if (key === "file" && value instanceof File) {
           formData.append(key, value);
         } else if (value) {
           formData.append(key, value.toString());
@@ -144,193 +140,203 @@ export const AddocCreate = ({ onSuccess }: AddocCreateProps) => {
       const result = await response.json();
       console.log("Response from backend:", result);
 
-      showToast.success({
-        message: "Document created successfully",
-      });
+      toast.success("Document created successfully");
       form.reset();
+      setSelectedFile(null);
       if (onSuccess) onSuccess();
     } catch (error) {
       console.error("Error creating document:", error);
-      showToast.error({
-        message: "Failed to create document",
-      });
+      toast.error("Failed to create document");
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <Card className="p-6">
-      <Form {...form}>
-        <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <FormField
-              control={form.control}
-              name="type_id"
-              render={({ field }) => (
-                <FormItem className="flex flex-col">
-                  <FormLabel>Document Type</FormLabel>
-                  <Popover open={openDocType} onOpenChange={setOpenDocType}>
-                    <PopoverTrigger asChild>
-                      <FormControl>
-                        <Button
-                          variant="outline"
-                          role="combobox"
-                          className={cn(
-                            "w-full justify-between",
-                            !field.value && "text-muted-foreground"
-                          )}
-                          disabled={isLoadingTypes}
-                        >
-                          {field.value
-                            ? documentTypes.find(
-                                (type) => type.id.toString() === field.value
-                              )?.type_name || "Select type"
-                            : "Select type"}
-                          {isLoadingTypes ? (
-                            <Loader2 className="ml-2 h-4 w-4 shrink-0 animate-spin opacity-50" />
-                          ) : (
-                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                          )}
-                        </Button>
-                      </FormControl>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[400px] p-0">
-                      <Command>
-                        <CommandInput placeholder="Search document type..." />
-                        <CommandEmpty>No document type found.</CommandEmpty>
-                        <CommandGroup heading="Document Types">
-                          <div className="max-h-[300px] overflow-auto">
-                            {documentTypes.map((type) => (
-                              <CommandItem
-                                key={type.id}
-                                value={type.type_name}
-                                onSelect={() => {
-                                  form.setValue("type_id", type.id.toString(), {
-                                    shouldValidate: true,
-                                  });
-                                  setOpenDocType(false);
-                                }}
-                              >
-                                <Check
-                                  className={cn(
-                                    "mr-2 h-4 w-4",
-                                    type.id.toString() === field.value
-                                      ? "opacity-100"
-                                      : "opacity-0"
-                                  )}
-                                />
-                                {type.type_name}
-                              </CommandItem>
-                            ))}
-                          </div>
-                        </CommandGroup>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+    <Card sx={{ borderRadius: 2 }}>
+      <CardContent sx={{ p: 3 }}>
+        <Typography variant="h6" gutterBottom>
+          Create New Document
+        </Typography>
+        <Divider sx={{ mb: 3 }} />
 
-            <FormField
-              control={form.control}
-              name="document_number"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Document Number</FormLabel>
-                  <FormControl>
-                    <Input {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <FormField
-              control={form.control}
-              name="document_date"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Document Date</FormLabel>
-                  <FormControl>
-                    <Input type="date" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="receive_date"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Receive Date</FormLabel>
-                  <FormControl>
-                    <Input type="date" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <FormField
-              control={form.control}
-              name="po_no"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>PO Number</FormLabel>
-                  <FormControl>
-                    <Input {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="file"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>File</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="file"
-                      onChange={(e) => field.onChange(e.target.files?.[0])}
+        <Box component="form" onSubmit={form.handleSubmit(handleSubmit)}>
+          <Grid container spacing={3}>
+            <Grid item xs={12} md={6}>
+              <Controller
+                name="type_id"
+                control={form.control}
+                render={({ field }) => (
+                  <FormControl
+                    fullWidth
+                    error={!!form.formState.errors.type_id}
+                  >
+                    <Autocomplete
+                      value={
+                        documentTypes.find(
+                          (type) => type.id.toString() === field.value
+                        ) || null
+                      }
+                      onChange={(_, newValue) => {
+                        field.onChange(newValue ? newValue.id.toString() : "");
+                      }}
+                      options={documentTypes}
+                      getOptionLabel={(option) => {
+                        if (!option) return "";
+                        return option.type_name;
+                      }}
+                      loading={isLoadingTypes}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          label="Document Type"
+                          error={!!form.formState.errors.type_id}
+                          helperText={form.formState.errors.type_id?.message}
+                          InputProps={{
+                            ...params.InputProps,
+                            endAdornment: (
+                              <>
+                                {isLoadingTypes ? (
+                                  <CircularProgress size={20} />
+                                ) : (
+                                  params.InputProps.endAdornment
+                                )}
+                              </>
+                            ),
+                          }}
+                        />
+                      )}
                     />
                   </FormControl>
-                  <FormMessage />
-                </FormItem>
+                )}
+              />
+            </Grid>
+
+            <Grid item xs={12} md={6}>
+              <Controller
+                name="document_number"
+                control={form.control}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    fullWidth
+                    label="Document Number"
+                    error={!!form.formState.errors.document_number}
+                    helperText={form.formState.errors.document_number?.message}
+                  />
+                )}
+              />
+            </Grid>
+
+            <Grid item xs={12} md={6}>
+              <Controller
+                name="document_date"
+                control={form.control}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    fullWidth
+                    label="Document Date"
+                    type="date"
+                    error={!!form.formState.errors.document_date}
+                    helperText={form.formState.errors.document_date?.message}
+                    InputLabelProps={{ shrink: true }}
+                  />
+                )}
+              />
+            </Grid>
+
+            <Grid item xs={12} md={6}>
+              <Controller
+                name="receive_date"
+                control={form.control}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    fullWidth
+                    label="Receive Date"
+                    type="date"
+                    error={!!form.formState.errors.receive_date}
+                    helperText={form.formState.errors.receive_date?.message}
+                    InputLabelProps={{ shrink: true }}
+                  />
+                )}
+              />
+            </Grid>
+
+            <Grid item xs={12} md={6}>
+              <Controller
+                name="po_no"
+                control={form.control}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    fullWidth
+                    label="PO Number"
+                    error={!!form.formState.errors.po_no}
+                    helperText={form.formState.errors.po_no?.message}
+                  />
+                )}
+              />
+            </Grid>
+
+            <Grid item xs={12} md={6}>
+              <Button
+                component="label"
+                variant="outlined"
+                startIcon={<CloudUploadIcon />}
+                sx={{ height: "56px", width: "100%" }}
+              >
+                {selectedFile ? selectedFile.name : "Upload Document"}
+                <input
+                  type="file"
+                  hidden
+                  onChange={handleFileChange}
+                  accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                />
+              </Button>
+              {form.formState.errors.file && (
+                <FormHelperText error>
+                  {form.formState.errors.file.message}
+                </FormHelperText>
               )}
-            />
-          </div>
+            </Grid>
 
-          <FormField
-            control={form.control}
-            name="remarks"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Remarks</FormLabel>
-                <FormControl>
-                  <Textarea {...field} className="min-h-[100px]" />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+            <Grid item xs={12}>
+              <Controller
+                name="remarks"
+                control={form.control}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    fullWidth
+                    label="Remarks"
+                    multiline
+                    rows={4}
+                    error={!!form.formState.errors.remarks}
+                    helperText={form.formState.errors.remarks?.message}
+                  />
+                )}
+              />
+            </Grid>
 
-          <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-            Create Document
-          </Button>
-        </form>
-      </Form>
+            <Grid item xs={12}>
+              <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 2 }}>
+                <Button
+                  type="submit"
+                  variant="contained"
+                  disabled={isSubmitting}
+                  startIcon={
+                    isSubmitting ? <CircularProgress size={20} /> : <SaveIcon />
+                  }
+                >
+                  {isSubmitting ? "Saving..." : "Save Document"}
+                </Button>
+              </Box>
+            </Grid>
+          </Grid>
+        </Box>
+      </CardContent>
     </Card>
   );
 };

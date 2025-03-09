@@ -2,6 +2,12 @@ import { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
 import { RegisterForm } from "@/components/auth/register-form";
+import { ThemeToggle } from "@/components/theme/ThemeToggle";
+import Box from "@mui/material/Box";
+import Paper from "@mui/material/Paper";
+import Typography from "@mui/material/Typography";
+import Container from "@mui/material/Container";
+import Grid from "@mui/material/Grid";
 
 export const metadata: Metadata = {
   title: "Register",
@@ -10,38 +16,79 @@ export const metadata: Metadata = {
 
 export default function RegisterPage() {
   return (
-    <div className="min-h-screen w-full bg-gray-900 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        <div className="bg-gray-800 rounded-lg shadow-xl p-8">
-          <div className="flex flex-col items-center space-y-6 mb-8">
+    <Box
+      sx={{
+        minHeight: "100vh",
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "center",
+        py: 4,
+      }}
+    >
+      <Box
+        sx={{
+          position: "absolute",
+          top: 16,
+          right: 16,
+        }}
+      >
+        <ThemeToggle />
+      </Box>
+
+      <Container maxWidth="sm">
+        <Paper
+          elevation={6}
+          sx={{
+            p: 4,
+            borderRadius: 2,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+          }}
+        >
+          <Box sx={{ mb: 2 }}>
             <Image
               src="/logo.png"
               alt="Logo"
               width={64}
               height={64}
-              className="rounded-lg"
+              style={{ borderRadius: "8px" }}
             />
-            <div className="text-center">
-              <h1 className="text-2xl font-bold text-white">
-                Create an account
-              </h1>
-              <p className="text-gray-400 mt-1">
-                Enter your details to get started
-              </p>
-            </div>
-          </div>
+          </Box>
+
+          <Typography
+            component="h1"
+            variant="h4"
+            gutterBottom
+            sx={{ fontWeight: 600 }}
+          >
+            Create an account
+          </Typography>
+          <Typography variant="subtitle1" color="text.secondary" sx={{ mb: 4 }}>
+            Enter your details to get started
+          </Typography>
+
           <RegisterForm />
-          <p className="mt-6 px-8 text-center text-sm text-gray-400">
-            Already have an account?{" "}
-            <Link
-              href="/login"
-              className="text-blue-500 hover:text-blue-400 underline underline-offset-4"
-            >
-              Sign in
-            </Link>
-          </p>
-        </div>
-      </div>
-    </div>
+
+          <Grid container justifyContent="center" sx={{ mt: 3 }}>
+            <Grid item>
+              <Typography variant="body2" color="text.secondary">
+                Already have an account?{" "}
+                <Link
+                  href="/login"
+                  style={{
+                    textDecoration: "none",
+                    color: "primary.main",
+                    fontWeight: 500,
+                  }}
+                >
+                  Sign in
+                </Link>
+              </Typography>
+            </Grid>
+          </Grid>
+        </Paper>
+      </Container>
+    </Box>
   );
 }

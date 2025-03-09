@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getCookie } from "@/lib/cookies";
+import { getApiEndpoint } from "@/lib/api";
 
 interface User {
   id: number;
@@ -27,15 +28,12 @@ export function useAuth() {
       }
 
       try {
-        const response = await fetch(
-          `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/auth/me`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              Accept: "application/json",
-            },
-          }
-        );
+        const response = await fetch(getApiEndpoint("/api/auth/me"), {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+          },
+        });
 
         if (!response.ok) throw new Error("Failed to fetch user data");
 

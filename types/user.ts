@@ -5,11 +5,14 @@ export interface User {
   email: string;
   nik: string;
   project: string;
-  department_id: string;
-  department?: {
-    id: string;
-    name: string;
-  };
+  department_id: string | number;
+  department?:
+    | string
+    | {
+        id: string | number;
+        name: string;
+      };
+  location_code?: string;
   roles: string[];
   permissions: string[];
   created_at: string;

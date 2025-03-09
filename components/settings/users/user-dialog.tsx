@@ -1,28 +1,32 @@
+"use client";
+
 import { useState, useEffect } from "react";
 import { User } from "@/types/user";
 import { getCookie } from "@/lib/cookies";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
 import * as z from "zod";
 import Swal from "sweetalert2";
+import { useAppTheme } from "@/components/theme/ThemeProvider";
+
+// Material UI imports
+import Dialog from "@mui/material/Dialog";
+import DialogTitle from "@mui/material/DialogTitle";
+import DialogContent from "@mui/material/DialogContent";
+import DialogActions from "@mui/material/DialogActions";
+import TextField from "@mui/material/TextField";
+import Button from "@mui/material/Button";
+import FormControl from "@mui/material/FormControl";
+import FormHelperText from "@mui/material/FormHelperText";
+import InputLabel from "@mui/material/InputLabel";
+import Select from "@mui/material/Select";
+import MenuItem from "@mui/material/MenuItem";
+import FormGroup from "@mui/material/FormGroup";
+import FormControlLabel from "@mui/material/FormControlLabel";
+import Checkbox from "@mui/material/Checkbox";
+import Box from "@mui/material/Box";
+import CircularProgress from "@mui/material/CircularProgress";
+import Grid from "@mui/material/Grid";
 
 interface Role {
   id: string;
@@ -33,6 +37,10 @@ interface Department {
   id: number;
   name: string;
   akronim: string;
+}
+
+interface Project {
+  code: string;
 }
 
 interface UserDialogProps {
@@ -76,44 +84,66 @@ export default function UserDialog({
   onSave,
   refreshData,
 }: UserDialogProps) {
+  const { mode } = useAppTheme();
   const [availableRoles, setAvailableRoles] = useState<Role[]>([]);
   const [availableDepartments, setAvailableDepartments] = useState<
     Department[]
   >([]);
+  const [availableProjects, setAvailableProjects] = useState<Project[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const form = useForm<UserFormValues>({
     resolver: zodResolver(userFormSchema),
     defaultValues: {
-      name: "",
-      username: "",
-      email: "",
-      nik: "",
-      project: "",
-      department_id: "",
-      roles: [],
+      name: user?.name || "",
+      username: user?.username || "",
+      email: user?.email || "",
+      nik: user?.nik || "",
+      project: user?.project || "",
+      department_id: user?.department_id?.toString() || "",
+      roles: user?.roles || [],
       password: "",
       password_confirmation: "",
     },
   });
 
   useEffect(() => {
-    fetchRoles();
-    fetchDepartments();
-  }, []);
+    if (open) {
+      fetchRoles();
+      fetchDepartments();
+      fetchProjects();
+    }
+  }, [open]);
 
   useEffect(() => {
     if (user) {
-      form.reset({
-        name: user.name,
-        username: user.username,
-        email: user.email,
-        nik: user.nik,
-        project: user.project,
-        department_id: user.department_id,
-        roles: user.roles,
-      });
+      console.log("User data in dialog:", user);
+      console.log("Department ID:", user.department_id);
+      console.log("Department:", user.department);
+      console.log("Username:", user.username);
+
+      // Manually set each field to ensure they're properly updated
+      form.setValue("name", user.name || "");
+      form.setValue("username", user.username || "");
+      form.setValue("email", user.email || "");
+      form.setValue("nik", user.nik || "");
+      form.setValue("project", user.project || "");
+
+      // Handle department_id which can be a number or string
+      const deptId =
+        user.department_id !== undefined && user.department_id !== null
+          ? user.department_id.toString()
+          : "";
+      console.log("Setting department_id to:", deptId);
+      form.setValue("department_id", deptId);
+
+      form.setValue("roles", user.roles || []);
+
+      // Clear password fields
+      form.setValue("password", "");
+      form.setValue("password_confirmation", "");
     } else {
+      // Reset to empty values for new user
       form.reset({
         name: "",
         username: "",
@@ -160,18 +190,71 @@ export default function UserDialog({
         }
       );
       const result = await response.json();
-      console.log(result);
       if (result.success) {
+        console.log("Departments fetched:", result.data);
         setAvailableDepartments(result.data);
+
+        // If user has a department_id, log if it exists in the fetched departments
+        if (user && user.department_id) {
+          const deptId = user.department_id.toString();
+          const deptExists = result.data.some(
+            (dept: Department) => dept.id.toString() === deptId
+          );
+          console.log(
+            `Department ID ${deptId} exists in fetched departments: ${deptExists}`
+          );
+        }
       }
     } catch (error) {
       console.error("Error fetching departments:", error);
     }
   };
 
+  const fetchProjects = async () => {
+    try {
+      const token = getCookie("token");
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/master/projects/all`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+          },
+        }
+      );
+      const result = await response.json();
+      console.log("Projects fetched:", result);
+      setAvailableProjects(result);
+    } catch (error) {
+      console.error("Error fetching projects:", error);
+    }
+  };
+
+  const handleRoleChange = (roleName: string) => {
+    const currentRoles = form.getValues("roles") || [];
+    const newRoles = currentRoles.includes(roleName)
+      ? currentRoles.filter((r) => r !== roleName)
+      : [...currentRoles, roleName];
+    form.setValue("roles", newRoles, { shouldValidate: true });
+  };
+
   const onSubmit = async (data: UserFormValues) => {
     try {
       setIsSubmitting(true);
+
+      // Log the form data being submitted
+      console.log("Submitting form data:", data);
+
+      // Ensure department_id is sent as a number if it's a valid ID
+      const formData = {
+        ...data,
+        department_id: data.department_id
+          ? parseInt(data.department_id, 10)
+          : null,
+      };
+
+      console.log("Processed form data:", formData);
+
       const token = getCookie("token");
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/users${
@@ -183,11 +266,13 @@ export default function UserDialog({
             Authorization: `Bearer ${token}`,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify(data),
+          body: JSON.stringify(formData),
         }
       );
 
       const result = await response.json();
+      console.log("API response:", result);
+
       if (result.status === "success") {
         Swal.fire({
           icon: "success",
@@ -195,13 +280,16 @@ export default function UserDialog({
           text: user
             ? "User has been updated successfully"
             : "New user has been created successfully",
+          timer: 1500,
         });
-        form.reset();
         onSave(result.data);
         refreshData();
         onOpenChange(false);
+      } else {
+        throw new Error(result.message || "Failed to save user");
       }
     } catch (error) {
+      console.error("Error saving user:", error);
       Swal.fire({
         icon: "error",
         title: "Error",
@@ -212,180 +300,241 @@ export default function UserDialog({
     }
   };
 
-  const handleRoleChange = (value: string) => {
-    const currentRoles = form.getValues("roles");
-    form.setValue(
-      "roles",
-      currentRoles.includes(value)
-        ? currentRoles.filter((r) => r !== value)
-        : [...currentRoles, value]
-    );
-  };
-
-  const handleDepartmentChange = (value: string) => {
-    form.setValue("department_id", value);
-  };
-
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{user ? "Edit User" : "Create User"}</DialogTitle>
-        </DialogHeader>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="name">Name</Label>
-            <Input
-              {...form.register("name")}
-              id="name"
-              aria-invalid={!!form.formState.errors.name}
-            />
-            {form.formState.errors.name && (
-              <p className="text-sm text-red-500">
-                {form.formState.errors.name.message}
-              </p>
-            )}
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="username">Username</Label>
-            <Input
-              {...form.register("username")}
-              id="username"
-              aria-invalid={!!form.formState.errors.username}
-            />
-            {form.formState.errors.username && (
-              <p className="text-sm text-red-500">
-                {form.formState.errors.username.message}
-              </p>
-            )}
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <Input
-              {...form.register("email")}
-              id="email"
-              type="email"
-              aria-invalid={!!form.formState.errors.email}
-            />
-            {form.formState.errors.email && (
-              <p className="text-sm text-red-500">
-                {form.formState.errors.email.message}
-              </p>
-            )}
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="nik">NIK</Label>
-            <Input
-              {...form.register("nik")}
-              id="nik"
-              aria-invalid={!!form.formState.errors.nik}
-            />
-            {form.formState.errors.nik && (
-              <p className="text-sm text-red-500">
-                {form.formState.errors.nik.message}
-              </p>
-            )}
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="project">Project</Label>
-            <Input
-              {...form.register("project")}
-              id="project"
-              aria-invalid={!!form.formState.errors.project}
-            />
-            {form.formState.errors.project && (
-              <p className="text-sm text-red-500">
-                {form.formState.errors.project.message}
-              </p>
-            )}
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="department">Department</Label>
-            <Select
-              value={form.watch("department_id")}
-              onValueChange={handleDepartmentChange}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select a department" />
-              </SelectTrigger>
-              <SelectContent>
-                {availableDepartments.map((dept) => (
-                  <SelectItem key={dept.id} value={dept.id.toString()}>
-                    {dept.name} ({dept.akronim})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {form.formState.errors.department_id && (
-              <p className="text-sm text-red-500">
-                {form.formState.errors.department_id.message}
-              </p>
-            )}
-          </div>
-          <div className="space-y-2">
-            <Label>Roles</Label>
-            <div className="grid gap-2 pt-2">
-              {availableRoles.map((role) => (
-                <div key={role.id} className="flex items-center space-x-2">
-                  <Checkbox
-                    id={`role-${role.id}`}
-                    checked={form.watch("roles").includes(role.name)}
-                    onCheckedChange={(checked) => {
-                      handleRoleChange(role.name);
-                    }}
+    <Dialog
+      open={open}
+      onClose={() => !isSubmitting && onOpenChange(false)}
+      maxWidth="sm"
+      fullWidth
+    >
+      <DialogTitle>{user ? "Edit User" : "Create User"}</DialogTitle>
+      <form onSubmit={form.handleSubmit(onSubmit)}>
+        <DialogContent>
+          <Grid container spacing={2}>
+            <Grid item xs={12}>
+              <Controller
+                name="name"
+                control={form.control}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    fullWidth
+                    label="Name"
+                    error={!!form.formState.errors.name}
+                    helperText={form.formState.errors.name?.message}
                   />
-                  <Label
-                    htmlFor={`role-${role.id}`}
-                    className="text-sm font-normal capitalize"
+                )}
+              />
+            </Grid>
+
+            <Grid item xs={12}>
+              <Controller
+                name="username"
+                control={form.control}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    fullWidth
+                    label="Username"
+                    error={!!form.formState.errors.username}
+                    helperText={form.formState.errors.username?.message}
+                    disabled={!!user}
+                    InputLabelProps={{ shrink: true }}
+                  />
+                )}
+              />
+            </Grid>
+
+            <Grid item xs={12}>
+              <Controller
+                name="email"
+                control={form.control}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    fullWidth
+                    label="Email"
+                    type="email"
+                    error={!!form.formState.errors.email}
+                    helperText={form.formState.errors.email?.message}
+                  />
+                )}
+              />
+            </Grid>
+
+            <Grid item xs={12}>
+              <Controller
+                name="nik"
+                control={form.control}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    fullWidth
+                    label="NIK"
+                    error={!!form.formState.errors.nik}
+                    helperText={form.formState.errors.nik?.message}
+                  />
+                )}
+              />
+            </Grid>
+
+            <Grid item xs={12}>
+              <Controller
+                name="project"
+                control={form.control}
+                render={({ field }) => (
+                  <FormControl
+                    fullWidth
+                    error={!!form.formState.errors.project}
                   >
-                    {role.name}
-                  </Label>
-                </div>
-              ))}
-            </div>
-            {form.formState.errors.roles && (
-              <p className="text-sm text-red-500">
-                {form.formState.errors.roles.message}
-              </p>
+                    <InputLabel id="project-label" shrink>
+                      Project
+                    </InputLabel>
+                    <Select
+                      {...field}
+                      labelId="project-label"
+                      value={field.value || ""}
+                      label="Project"
+                    >
+                      <MenuItem value="">
+                        <em>Select a project</em>
+                      </MenuItem>
+                      {availableProjects.map((project) => (
+                        <MenuItem key={project.code} value={project.code}>
+                          {project.code}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                    <FormHelperText>
+                      {form.formState.errors.project?.message}
+                    </FormHelperText>
+                  </FormControl>
+                )}
+              />
+            </Grid>
+
+            <Grid item xs={12}>
+              <Controller
+                name="department_id"
+                control={form.control}
+                render={({ field }) => (
+                  <FormControl
+                    fullWidth
+                    error={!!form.formState.errors.department_id}
+                  >
+                    <InputLabel id="department-label" shrink>
+                      Department
+                    </InputLabel>
+                    <Select
+                      {...field}
+                      labelId="department-label"
+                      value={field.value || ""}
+                      label="Department"
+                    >
+                      <MenuItem value="">
+                        <em>Select a department</em>
+                      </MenuItem>
+                      {availableDepartments.map((dept) => (
+                        <MenuItem key={dept.id} value={dept.id.toString()}>
+                          {dept.name} ({dept.akronim})
+                        </MenuItem>
+                      ))}
+                    </Select>
+                    <FormHelperText>
+                      {form.formState.errors.department_id?.message}
+                    </FormHelperText>
+                  </FormControl>
+                )}
+              />
+            </Grid>
+
+            <Grid item xs={12}>
+              <FormControl
+                component="fieldset"
+                error={!!form.formState.errors.roles}
+                fullWidth
+              >
+                <InputLabel sx={{ position: "static", mb: 1 }}>
+                  Roles
+                </InputLabel>
+                <FormGroup>
+                  {availableRoles.map((role) => (
+                    <FormControlLabel
+                      key={role.id}
+                      control={
+                        <Checkbox
+                          checked={
+                            form.watch("roles")?.includes(role.name) || false
+                          }
+                          onChange={() => handleRoleChange(role.name)}
+                          disabled={isSubmitting}
+                        />
+                      }
+                      label={role.name}
+                    />
+                  ))}
+                </FormGroup>
+                <FormHelperText>
+                  {form.formState.errors.roles?.message}
+                </FormHelperText>
+              </FormControl>
+            </Grid>
+
+            {!user && (
+              <>
+                <Grid item xs={12}>
+                  <Controller
+                    name="password"
+                    control={form.control}
+                    render={({ field }) => (
+                      <TextField
+                        {...field}
+                        fullWidth
+                        label="Password"
+                        type="password"
+                        error={!!form.formState.errors.password}
+                        helperText={form.formState.errors.password?.message}
+                      />
+                    )}
+                  />
+                </Grid>
+
+                <Grid item xs={12}>
+                  <Controller
+                    name="password_confirmation"
+                    control={form.control}
+                    render={({ field }) => (
+                      <TextField
+                        {...field}
+                        fullWidth
+                        label="Confirm Password"
+                        type="password"
+                        error={!!form.formState.errors.password_confirmation}
+                        helperText={
+                          form.formState.errors.password_confirmation?.message
+                        }
+                      />
+                    )}
+                  />
+                </Grid>
+              </>
             )}
-          </div>
-          {!user && (
-            <>
-              <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
-                <Input
-                  {...form.register("password")}
-                  id="password"
-                  type="password"
-                  aria-invalid={!!form.formState.errors.password}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="password_confirmation">Confirm Password</Label>
-                <Input
-                  {...form.register("password_confirmation")}
-                  id="password_confirmation"
-                  type="password"
-                  aria-invalid={!!form.formState.errors.password_confirmation}
-                />
-              </div>
-            </>
-          )}
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={isSubmitting}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? "Saving..." : user ? "Update" : "Create"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => onOpenChange(false)} disabled={isSubmitting}>
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            variant="contained"
+            disabled={isSubmitting}
+            startIcon={isSubmitting ? <CircularProgress size={20} /> : null}
+          >
+            {isSubmitting ? "Saving..." : user ? "Update" : "Create"}
+          </Button>
+        </DialogActions>
+      </form>
     </Dialog>
   );
 }

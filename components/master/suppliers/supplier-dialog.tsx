@@ -1,20 +1,31 @@
+"use client";
+
 import { useState, useEffect } from "react";
 import { getCookie } from "@/lib/cookies";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { getApiEndpoint } from "@/lib/api";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import * as z from "zod";
 import Swal from "sweetalert2";
 import { Supplier } from "@/types/supplier";
+import { useAppTheme } from "@/components/theme/ThemeProvider";
+
+// Material UI imports
+import Dialog from "@mui/material/Dialog";
+import DialogActions from "@mui/material/DialogActions";
+import DialogContent from "@mui/material/DialogContent";
+import DialogTitle from "@mui/material/DialogTitle";
+import Button from "@mui/material/Button";
+import TextField from "@mui/material/TextField";
+import FormControl from "@mui/material/FormControl";
+import FormHelperText from "@mui/material/FormHelperText";
+import InputLabel from "@mui/material/InputLabel";
+import Select from "@mui/material/Select";
+import MenuItem from "@mui/material/MenuItem";
+import FormControlLabel from "@mui/material/FormControlLabel";
+import Switch from "@mui/material/Switch";
+import Grid from "@mui/material/Grid";
+import CircularProgress from "@mui/material/CircularProgress";
 
 interface SupplierDialogProps {
   open: boolean;
@@ -44,9 +55,15 @@ export default function SupplierDialog({
   onSave,
   refreshData,
 }: SupplierDialogProps) {
+  const { mode } = useAppTheme();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const form = useForm<SupplierFormValues>({
+  const {
+    control,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<SupplierFormValues>({
     resolver: zodResolver(supplierFormSchema),
     defaultValues: {
       sap_code: "",
@@ -60,9 +77,10 @@ export default function SupplierDialog({
     },
   });
 
+  // Update form when supplier changes
   useEffect(() => {
     if (supplier) {
-      form.reset({
+      reset({
         sap_code: supplier.sap_code || "",
         name: supplier.name,
         type: supplier.type,
@@ -72,57 +90,63 @@ export default function SupplierDialog({
         address: supplier.address || "",
         npwp: supplier.npwp || "",
       });
+    } else {
+      reset({
+        sap_code: "",
+        name: "",
+        type: "vendor",
+        city: "",
+        payment_project: "001H",
+        is_active: true,
+        address: "",
+        npwp: "",
+      });
     }
-  }, [supplier, form]);
+  }, [supplier, reset]);
 
   const onSubmit = async (data: SupplierFormValues) => {
+    setIsSubmitting(true);
     try {
-      setIsSubmitting(true);
       const token = getCookie("token");
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/master/suppliers${
-          supplier ? `/${supplier.id}` : ""
-        }`,
-        {
-          method: supplier ? "PUT" : "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(data),
-        }
-      );
+      const url = supplier
+        ? `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/master/suppliers/${supplier.id}`
+        : `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/master/suppliers`;
+      const method = supplier ? "PUT" : "POST";
+
+      const response = await fetch(url, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+        },
+        body: JSON.stringify(data),
+      });
 
       const result = await response.json();
 
-      if (result.error) {
-        setIsSubmitting(false);
-        await Swal.fire({
-          icon: "error",
-          title: "Error",
-          text: result.message,
-          timer: 1500,
-        });
-        return;
+      if (!response.ok) {
+        throw new Error(result.message || "Failed to save supplier");
       }
 
-      if (result.success) {
-        await Swal.fire({
-          icon: "success",
-          title: supplier ? "Supplier Updated" : "Supplier Created",
-          text: result.message,
-          timer: 1500,
-        });
-        form.reset();
-        onSave(result.data);
-        onOpenChange(false);
-      }
+      Swal.fire({
+        icon: "success",
+        title: "Success",
+        text: supplier
+          ? "Supplier updated successfully"
+          : "Supplier created successfully",
+        timer: 1500,
+      });
+
+      onSave(result.data);
+      onOpenChange(false);
+      refreshData();
     } catch (error) {
-      console.error("Error:", error);
-      await Swal.fire({
+      console.error("Error saving supplier:", error);
+      Swal.fire({
         icon: "error",
         title: "Error",
-        text: error instanceof Error ? error.message : "Something went wrong",
+        text: "Failed to save supplier",
       });
     } finally {
       setIsSubmitting(false);
@@ -130,110 +154,184 @@ export default function SupplierDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>
-            {supplier ? "Edit Supplier" : "Create Supplier"}
-          </DialogTitle>
-        </DialogHeader>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="sap_code">SAP Code</Label>
-            <Input
-              {...form.register("sap_code")}
-              id="sap_code"
-              placeholder="Enter SAP code"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="name">Name</Label>
-            <Input
-              {...form.register("name")}
-              id="name"
-              placeholder="Enter supplier name"
-            />
-            {form.formState.errors.name && (
-              <p className="text-sm text-red-500">
-                {form.formState.errors.name.message}
-              </p>
-            )}
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="type">Type</Label>
-            <select
-              {...form.register("type")}
-              className="w-full rounded-md border border-input bg-background px-3 py-2"
-            >
-              <option value="vendor">Vendor</option>
-              <option value="customer">Customer</option>
-            </select>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="city">City</Label>
-            <Input
-              {...form.register("city")}
-              id="city"
-              placeholder="Enter city"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="payment_project">Payment Project</Label>
-            <Input
-              {...form.register("payment_project")}
-              id="payment_project"
-              placeholder="Enter payment project code"
-              defaultValue="001H"
-            />
-          </div>
-
-          <div className="flex items-center space-x-2">
-            <input
-              type="checkbox"
-              {...form.register("is_active")}
-              id="is_active"
-              className="h-4 w-4 rounded border-gray-300"
-            />
-            <Label htmlFor="is_active">Active</Label>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="address">Address</Label>
-            <Input
-              {...form.register("address")}
-              id="address"
-              placeholder="Enter address"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="npwp">NPWP</Label>
-            <Input
-              {...form.register("npwp")}
-              id="npwp"
-              placeholder="Enter NPWP number"
-            />
-          </div>
-
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={isSubmitting}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? "Saving..." : supplier ? "Update" : "Create"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
+    <Dialog
+      open={open}
+      onClose={() => onOpenChange(false)}
+      fullWidth
+      maxWidth="sm"
+    >
+      <DialogTitle>
+        {supplier ? "Edit Supplier" : "Add New Supplier"}
+      </DialogTitle>
+      <form onSubmit={handleSubmit(onSubmit)}>
+        <DialogContent>
+          <Grid container spacing={2}>
+            <Grid item xs={12} sm={6}>
+              <Controller
+                name="sap_code"
+                control={control}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    label="SAP Code"
+                    fullWidth
+                    margin="normal"
+                    value={field.value || ""}
+                    error={!!errors.sap_code}
+                    helperText={errors.sap_code?.message}
+                    disabled={isSubmitting}
+                  />
+                )}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <Controller
+                name="type"
+                control={control}
+                render={({ field }) => (
+                  <FormControl fullWidth margin="normal" error={!!errors.type}>
+                    <InputLabel>Type</InputLabel>
+                    <Select {...field} label="Type" disabled={isSubmitting}>
+                      <MenuItem value="vendor">Vendor</MenuItem>
+                      <MenuItem value="customer">Customer</MenuItem>
+                    </Select>
+                    {errors.type && (
+                      <FormHelperText>{errors.type.message}</FormHelperText>
+                    )}
+                  </FormControl>
+                )}
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <Controller
+                name="name"
+                control={control}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    label="Name"
+                    fullWidth
+                    margin="normal"
+                    required
+                    error={!!errors.name}
+                    helperText={errors.name?.message}
+                    disabled={isSubmitting}
+                  />
+                )}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <Controller
+                name="city"
+                control={control}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    label="City"
+                    fullWidth
+                    margin="normal"
+                    value={field.value || ""}
+                    error={!!errors.city}
+                    helperText={errors.city?.message}
+                    disabled={isSubmitting}
+                  />
+                )}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <Controller
+                name="payment_project"
+                control={control}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    label="Payment Project"
+                    fullWidth
+                    margin="normal"
+                    error={!!errors.payment_project}
+                    helperText={errors.payment_project?.message}
+                    disabled={isSubmitting}
+                  />
+                )}
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <Controller
+                name="address"
+                control={control}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    label="Address"
+                    fullWidth
+                    multiline
+                    rows={3}
+                    margin="normal"
+                    value={field.value || ""}
+                    error={!!errors.address}
+                    helperText={errors.address?.message}
+                    disabled={isSubmitting}
+                  />
+                )}
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <Controller
+                name="npwp"
+                control={control}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    label="NPWP"
+                    fullWidth
+                    margin="normal"
+                    value={field.value || ""}
+                    error={!!errors.npwp}
+                    helperText={errors.npwp?.message}
+                    disabled={isSubmitting}
+                  />
+                )}
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <Controller
+                name="is_active"
+                control={control}
+                render={({ field: { value, onChange } }) => (
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={value}
+                        onChange={(e) => onChange(e.target.checked)}
+                        disabled={isSubmitting}
+                        color="primary"
+                      />
+                    }
+                    label="Active"
+                  />
+                )}
+              />
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button
+            onClick={() => onOpenChange(false)}
+            disabled={isSubmitting}
+            variant="outlined"
+          >
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            variant="contained"
+            disabled={isSubmitting}
+            startIcon={isSubmitting ? <CircularProgress size={20} /> : null}
+          >
+            {isSubmitting ? "Saving..." : "Save"}
+          </Button>
+        </DialogActions>
+      </form>
     </Dialog>
   );
 }

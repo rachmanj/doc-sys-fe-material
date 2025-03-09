@@ -1,10 +1,13 @@
 "use client";
 
+// Import components from the index file
 import { useState } from "react";
-import { LpdDashboard } from "@/components/deliveries/lpd/lpd-dashboard";
-import { LpdTable } from "@/components/deliveries/lpd/lpd-table";
-import { LpdCreate } from "@/components/deliveries/lpd/lpd-create";
-import { useAppTheme } from "@/components/theme/ThemeProvider";
+import {
+  SpiDashboard,
+  SpiTable,
+  SpiCreate,
+} from "../../../../components/deliveries/spi";
+import { useAppTheme } from "../../../../components/theme/ThemeProvider";
 
 // Material UI imports
 import Box from "@mui/material/Box";
@@ -26,8 +29,8 @@ function TabPanel(props: TabPanelProps) {
     <div
       role="tabpanel"
       hidden={value !== index}
-      id={`lpd-tabpanel-${index}`}
-      aria-labelledby={`lpd-tab-${index}`}
+      id={`spi-tabpanel-${index}`}
+      aria-labelledby={`spi-tab-${index}`}
       {...other}
     >
       {value === index && <Box sx={{ pt: 3 }}>{children}</Box>}
@@ -37,12 +40,12 @@ function TabPanel(props: TabPanelProps) {
 
 function a11yProps(index: number) {
   return {
-    id: `lpd-tab-${index}`,
-    "aria-controls": `lpd-tabpanel-${index}`,
+    id: `spi-tab-${index}`,
+    "aria-controls": `spi-tabpanel-${index}`,
   };
 }
 
-export default function LpdPage() {
+export default function SpiPage() {
   const { mode } = useAppTheme();
   const [tabValue, setTabValue] = useState(0);
 
@@ -54,10 +57,10 @@ export default function LpdPage() {
     <Box>
       <Box sx={{ mb: 4 }}>
         <Typography variant="h4" component="h1" gutterBottom fontWeight="bold">
-          LPD Management
+          SPI Management
         </Typography>
         <Typography variant="subtitle1" color="text.secondary">
-          Manage your Local Port Delivery documents
+          Manage your Surat Pengiriman Invoice documents
         </Typography>
       </Box>
 
@@ -66,7 +69,7 @@ export default function LpdPage() {
           <Tabs
             value={tabValue}
             onChange={handleTabChange}
-            aria-label="lpd management tabs"
+            aria-label="spi management tabs"
             sx={{ px: 2 }}
           >
             <Tab label="Dashboard" {...a11yProps(0)} />
@@ -76,15 +79,15 @@ export default function LpdPage() {
         </Box>
 
         <TabPanel value={tabValue} index={0}>
-          <LpdDashboard />
+          <SpiDashboard />
         </TabPanel>
 
         <TabPanel value={tabValue} index={1}>
-          <LpdTable />
+          <SpiTable />
         </TabPanel>
 
         <TabPanel value={tabValue} index={2}>
-          <LpdCreate />
+          <SpiCreate />
         </TabPanel>
       </Paper>
     </Box>

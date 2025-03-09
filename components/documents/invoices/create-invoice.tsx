@@ -1,46 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { Button } from "@/components/ui/button";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Card } from "@/components/ui/card";
-import { Textarea } from "@/components/ui/textarea";
 import { getCookie } from "@/lib/cookies";
-import { Loader2 } from "lucide-react";
-import { showToast } from "@/lib/toast";
-import { Check, ChevronsUpDown } from "lucide-react";
-import { cn } from "@/lib/utils";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-} from "@/components/ui/command";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { format } from "date-fns";
+import Swal from "sweetalert2";
+import { useAppTheme } from "@/components/theme/ThemeProvider";
 import {
   Supplier,
   InvoiceType,
@@ -52,6 +18,37 @@ import {
   createInvoiceSchema,
   CreateInvoiceFormValues,
 } from "@/schemas/create-invoice-schema";
+
+// Material UI imports
+import Box from "@mui/material/Box";
+import Paper from "@mui/material/Paper";
+import Grid from "@mui/material/Grid";
+import Typography from "@mui/material/Typography";
+import TextField from "@mui/material/TextField";
+import Button from "@mui/material/Button";
+import FormControl from "@mui/material/FormControl";
+import FormHelperText from "@mui/material/FormHelperText";
+import InputLabel from "@mui/material/InputLabel";
+import Select from "@mui/material/Select";
+import MenuItem from "@mui/material/MenuItem";
+import Autocomplete from "@mui/material/Autocomplete";
+import CircularProgress from "@mui/material/CircularProgress";
+import Divider from "@mui/material/Divider";
+import Chip from "@mui/material/Chip";
+import Table from "@mui/material/Table";
+import TableBody from "@mui/material/TableBody";
+import TableCell from "@mui/material/TableCell";
+import TableContainer from "@mui/material/TableContainer";
+import TableHead from "@mui/material/TableHead";
+import TableRow from "@mui/material/TableRow";
+import Checkbox from "@mui/material/Checkbox";
+import Alert from "@mui/material/Alert";
+import InputAdornment from "@mui/material/InputAdornment";
+
+// Icons
+import SaveIcon from "@mui/icons-material/Save";
+import SearchIcon from "@mui/icons-material/Search";
+import AttachFileIcon from "@mui/icons-material/AttachFile";
 
 const formatNumber = (value: string) => {
   // Handle empty or invalid input
@@ -159,8 +156,9 @@ export default function CreateInvoice({ onSuccess }: CreateInvoiceProps) {
       setSuppliers(result.data || []);
     } catch (error) {
       console.error("Error fetching suppliers:", error);
-      showToast.error({
-        message: "Failed to load suppliers",
+      Swal.fire({
+        icon: "error",
+        title: "Failed to load suppliers",
       });
     } finally {
       setIsLoadingSuppliers(false);
@@ -188,8 +186,9 @@ export default function CreateInvoice({ onSuccess }: CreateInvoiceProps) {
       setInvoiceTypes(result.data || []);
     } catch (error) {
       console.error("Error fetching invoice types:", error);
-      showToast.error({
-        message: "Failed to load invoice types",
+      Swal.fire({
+        icon: "error",
+        title: "Failed to load invoice types",
       });
     } finally {
       setIsLoadingInvoiceTypes(false);
@@ -222,8 +221,9 @@ export default function CreateInvoice({ onSuccess }: CreateInvoiceProps) {
       setAdditionalDocs(Array.isArray(result) ? result : []);
     } catch (error) {
       console.error("Error fetching additional documents:", error);
-      showToast.error({
-        message: "Failed to load additional documents",
+      Swal.fire({
+        icon: "error",
+        title: "Failed to load additional documents",
       });
     } finally {
       setIsLoadingDocs(false);
@@ -250,8 +250,9 @@ export default function CreateInvoice({ onSuccess }: CreateInvoiceProps) {
       return result.payment_project;
     } catch (error) {
       console.error("Error fetching supplier payment project:", error);
-      showToast.error({
-        message: "Failed to load supplier payment project",
+      Swal.fire({
+        icon: "error",
+        title: "Failed to load supplier payment project",
       });
       return null;
     }
@@ -278,8 +279,9 @@ export default function CreateInvoice({ onSuccess }: CreateInvoiceProps) {
       setProjects(Array.isArray(result) ? result : []);
     } catch (error) {
       console.error("Error fetching projects:", error);
-      showToast.error({
-        message: "Failed to load projects",
+      Swal.fire({
+        icon: "error",
+        title: "Failed to load projects",
       });
     } finally {
       setIsLoadingProjects(false);
@@ -359,8 +361,9 @@ export default function CreateInvoice({ onSuccess }: CreateInvoiceProps) {
         throw new Error("Failed to create invoice");
       }
 
-      showToast.success({
-        message: "Invoice created successfully",
+      Swal.fire({
+        icon: "success",
+        title: "Invoice created successfully",
       });
 
       // Reset form and additional documents
@@ -371,8 +374,9 @@ export default function CreateInvoice({ onSuccess }: CreateInvoiceProps) {
       onSuccess();
     } catch (error) {
       console.error("Error creating invoice:", error);
-      showToast.error({
-        message: "Failed to create invoice",
+      Swal.fire({
+        icon: "error",
+        title: "Failed to create invoice",
       });
     } finally {
       setIsSubmitting(false);
@@ -380,434 +384,312 @@ export default function CreateInvoice({ onSuccess }: CreateInvoiceProps) {
   };
 
   return (
-    <Card className="p-6">
-      <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <FormField
-              control={form.control}
+    <Paper className="p-6">
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        <Grid container spacing={2}>
+          <Grid item xs={12} md={6}>
+            <Controller
               name="supplier_id"
-              render={({ field }) => (
-                <FormItem className="flex flex-col">
-                  <FormLabel>Supplier</FormLabel>
-                  <Popover open={openSupplier} onOpenChange={setOpenSupplier}>
-                    <PopoverTrigger asChild>
-                      <FormControl>
-                        <Button
-                          variant="outline"
-                          role="combobox"
-                          className={cn(
-                            "w-full justify-between",
-                            !field.value && "text-muted-foreground"
-                          )}
-                          disabled={isLoadingSuppliers}
-                        >
-                          {field.value
-                            ? suppliers.find(
-                                (supplier) =>
-                                  supplier.id.toString() === field.value
-                              )?.name || "Select supplier"
-                            : "Select supplier"}
-                          {isLoadingSuppliers ? (
-                            <Loader2 className="ml-2 h-4 w-4 shrink-0 animate-spin opacity-50" />
-                          ) : (
-                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                          )}
-                        </Button>
-                      </FormControl>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[400px] p-0">
-                      <Command>
-                        <CommandInput placeholder="Search supplier..." />
-                        <CommandEmpty>No supplier found.</CommandEmpty>
-                        <CommandGroup className="max-h-[300px] overflow-auto">
-                          {suppliers.map((supplier) => (
-                            <CommandItem
-                              key={supplier.id}
-                              value={supplier.name}
-                              onSelect={async () => {
-                                form.setValue(
-                                  "supplier_id",
-                                  supplier.id.toString(),
-                                  {
-                                    shouldValidate: true,
-                                  }
-                                );
-
-                                // Reset payment project first
-                                form.setValue("payment_project", "", {
-                                  shouldValidate: true,
-                                });
-
-                                // Fetch and set payment project
-                                const paymentProject =
-                                  await fetchSupplierPaymentProject(
-                                    supplier.id.toString()
-                                  );
-                                if (paymentProject) {
-                                  form.setValue(
-                                    "payment_project",
-                                    paymentProject,
-                                    {
-                                      shouldValidate: true,
-                                    }
-                                  );
-                                }
-                                setOpenSupplier(false);
-                              }}
-                            >
-                              <Check
-                                className={cn(
-                                  "mr-2 h-4 w-4",
-                                  supplier.id.toString() === field.value
-                                    ? "opacity-100"
-                                    : "opacity-0"
-                                )}
-                              />
-                              {supplier.name}
-                              <span className="ml-2 text-muted-foreground">
-                                ({supplier.sap_code})
-                              </span>
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
               control={form.control}
-              name="type_id"
               render={({ field }) => (
-                <FormItem className="flex flex-col">
-                  <FormLabel>Invoice Type</FormLabel>
-                  <Popover
-                    open={openInvoiceType}
-                    onOpenChange={setOpenInvoiceType}
-                  >
-                    <PopoverTrigger asChild>
-                      <FormControl>
-                        <Button
-                          variant="outline"
-                          role="combobox"
-                          className={cn(
-                            "w-full justify-between",
-                            !field.value && "text-muted-foreground"
-                          )}
-                          disabled={isLoadingInvoiceTypes}
-                        >
-                          {field.value
-                            ? invoiceTypes.find(
-                                (type) => type.id.toString() === field.value
-                              )?.type_name || "Select type"
-                            : "Select type"}
-                          {isLoadingInvoiceTypes ? (
-                            <Loader2 className="ml-2 h-4 w-4 shrink-0 animate-spin opacity-50" />
-                          ) : (
-                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                          )}
-                        </Button>
-                      </FormControl>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[400px] p-0">
-                      <Command>
-                        <CommandInput placeholder="Search invoice type..." />
-                        <CommandEmpty>No invoice type found.</CommandEmpty>
-                        <CommandGroup className="max-h-[300px] overflow-auto">
-                          {invoiceTypes.map((type) => (
-                            <CommandItem
-                              key={type.id}
-                              value={type.type_name}
-                              onSelect={() => {
-                                form.setValue("type_id", type.id.toString());
-                                setOpenInvoiceType(false);
-                              }}
-                            >
-                              <Check
-                                className={cn(
-                                  "mr-2 h-4 w-4",
-                                  type.id.toString() === field.value
-                                    ? "opacity-100"
-                                    : "opacity-0"
-                                )}
-                              />
-                              {type.type_name}
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <FormField
-              control={form.control}
-              name="invoice_number"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Invoice Number</FormLabel>
-                  <FormControl>
-                    <Input
-                      {...field}
-                      onBlur={async (e) => {
-                        field.onBlur();
-                        const invoiceNumber = e.target.value;
-                        const supplierId = form.getValues("supplier_id");
-
-                        if (invoiceNumber && supplierId) {
-                          const exists = await checkInvoiceNumberDuplication(
-                            invoiceNumber,
-                            supplierId
-                          );
-                          if (exists) {
-                            form.setError("invoice_number", {
-                              type: "manual",
-                              message:
-                                "Invoice number is exist for selected supplier",
-                            });
-                          } else {
-                            form.clearErrors("invoice_number");
-                          }
-                        }
-                      }}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="invoice_date"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Invoice Date</FormLabel>
-                  <FormControl>
-                    <Input type="date" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="receive_date"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Receive Date</FormLabel>
-                  <FormControl>
-                    <Input type="date" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <FormField
-              control={form.control}
-              name="receive_project"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Receive Project</FormLabel>
-                  <FormControl>
-                    <Input {...field} readOnly className="bg-muted" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="invoice_project"
-              render={({ field }) => (
-                <FormItem className="flex flex-col">
-                  <FormLabel>Invoice Project</FormLabel>
-                  <Popover
-                    open={openInvoiceProject}
-                    onOpenChange={setOpenInvoiceProject}
-                  >
-                    <PopoverTrigger asChild>
-                      <FormControl>
-                        <Button
-                          variant="outline"
-                          role="combobox"
-                          className={cn(
-                            "w-full justify-between",
-                            !field.value && "text-muted-foreground"
-                          )}
-                          disabled={isLoadingProjects}
-                        >
-                          {field.value || "Select project"}
-                          {isLoadingProjects ? (
-                            <Loader2 className="ml-2 h-4 w-4 shrink-0 animate-spin opacity-50" />
-                          ) : (
-                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                          )}
-                        </Button>
-                      </FormControl>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[200px] p-0">
-                      <Command>
-                        <CommandInput placeholder="Search project..." />
-                        <CommandEmpty>No project found.</CommandEmpty>
-                        <CommandGroup className="max-h-[300px] overflow-auto">
-                          {projects.map((project) => (
-                            <CommandItem
-                              key={project.code}
-                              value={project.code}
-                              onSelect={() => {
-                                form.setValue("invoice_project", project.code, {
-                                  shouldValidate: true,
-                                });
-                                setOpenInvoiceProject(false);
-                              }}
-                            >
-                              <Check
-                                className={cn(
-                                  "mr-2 h-4 w-4",
-                                  project.code === field.value
-                                    ? "opacity-100"
-                                    : "opacity-0"
-                                )}
-                              />
-                              {project.code}
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="payment_project"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Payment Project</FormLabel>
-                  <FormControl>
-                    <Input {...field} placeholder="Enter payment project" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <FormField
-              control={form.control}
-              name="currency"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Currency</FormLabel>
+                <FormControl
+                  fullWidth
+                  error={!!form.formState.errors.supplier_id}
+                >
+                  <InputLabel>Supplier</InputLabel>
                   <Select
-                    onValueChange={field.onChange}
-                    defaultValue={field.value}
+                    {...field}
+                    label="Supplier"
+                    disabled={isLoadingSuppliers}
+                    endAdornment={
+                      isLoadingSuppliers ? <CircularProgress size={20} /> : null
+                    }
                   >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select currency" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="IDR">IDR</SelectItem>
-                      <SelectItem value="USD">USD</SelectItem>
-                    </SelectContent>
+                    {suppliers.map((supplier) => (
+                      <MenuItem
+                        key={supplier.id}
+                        value={supplier.id.toString()}
+                      >
+                        {supplier.name} ({supplier.sap_code})
+                      </MenuItem>
+                    ))}
                   </Select>
-                  <FormMessage />
-                </FormItem>
+                  <FormHelperText>
+                    {form.formState.errors.supplier_id?.message ||
+                      "Select a supplier"}
+                  </FormHelperText>
+                </FormControl>
               )}
             />
+          </Grid>
 
-            <FormField
+          <Grid item xs={12} md={6}>
+            <Controller
+              name="type_id"
               control={form.control}
+              render={({ field }) => (
+                <FormControl fullWidth error={!!form.formState.errors.type_id}>
+                  <InputLabel>Invoice Type</InputLabel>
+                  <Select
+                    {...field}
+                    label="Invoice Type"
+                    disabled={isLoadingInvoiceTypes}
+                    endAdornment={
+                      isLoadingInvoiceTypes ? (
+                        <CircularProgress size={20} />
+                      ) : null
+                    }
+                  >
+                    {invoiceTypes.map((type) => (
+                      <MenuItem key={type.id} value={type.id.toString()}>
+                        {type.type_name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                  <FormHelperText>
+                    {form.formState.errors.type_id?.message ||
+                      "Select an invoice type"}
+                  </FormHelperText>
+                </FormControl>
+              )}
+            />
+          </Grid>
+
+          <Grid item xs={12} md={6}>
+            <Controller
+              name="invoice_number"
+              control={form.control}
+              render={({ field }) => (
+                <TextField
+                  {...field}
+                  fullWidth
+                  label="Invoice Number"
+                  error={!!form.formState.errors.invoice_number}
+                  helperText={form.formState.errors.invoice_number?.message}
+                  onBlur={async (e) => {
+                    field.onBlur();
+                    const invoiceNumber = e.target.value;
+                    const supplierId = form.getValues("supplier_id");
+
+                    if (invoiceNumber && supplierId) {
+                      const exists = await checkInvoiceNumberDuplication(
+                        invoiceNumber,
+                        supplierId
+                      );
+                      if (exists) {
+                        form.setError("invoice_number", {
+                          type: "manual",
+                          message:
+                            "Invoice number is exist for selected supplier",
+                        });
+                      } else {
+                        form.clearErrors("invoice_number");
+                      }
+                    }
+                  }}
+                />
+              )}
+            />
+          </Grid>
+
+          <Grid item xs={12} md={6}>
+            <Controller
+              name="invoice_date"
+              control={form.control}
+              render={({ field }) => (
+                <TextField
+                  {...field}
+                  fullWidth
+                  label="Invoice Date"
+                  type="date"
+                  error={!!form.formState.errors.invoice_date}
+                  helperText={form.formState.errors.invoice_date?.message}
+                  InputLabelProps={{ shrink: true }}
+                />
+              )}
+            />
+          </Grid>
+
+          <Grid item xs={12} md={6}>
+            <Controller
+              name="receive_date"
+              control={form.control}
+              render={({ field }) => (
+                <TextField
+                  {...field}
+                  fullWidth
+                  label="Receive Date"
+                  type="date"
+                  error={!!form.formState.errors.receive_date}
+                  helperText={form.formState.errors.receive_date?.message}
+                  InputLabelProps={{ shrink: true }}
+                />
+              )}
+            />
+          </Grid>
+
+          <Grid item xs={12} md={6}>
+            <Controller
+              name="receive_project"
+              control={form.control}
+              render={({ field }) => (
+                <TextField
+                  {...field}
+                  fullWidth
+                  label="Receive Project"
+                  error={!!form.formState.errors.receive_project}
+                  helperText={form.formState.errors.receive_project?.message}
+                  InputProps={{
+                    readOnly: true,
+                  }}
+                />
+              )}
+            />
+          </Grid>
+
+          <Grid item xs={12} md={6}>
+            <Controller
+              name="invoice_project"
+              control={form.control}
+              render={({ field }) => (
+                <FormControl
+                  fullWidth
+                  error={!!form.formState.errors.invoice_project}
+                >
+                  <InputLabel>Invoice Project</InputLabel>
+                  <Select
+                    {...field}
+                    label="Invoice Project"
+                    disabled={isLoadingProjects}
+                    endAdornment={
+                      isLoadingProjects ? <CircularProgress size={20} /> : null
+                    }
+                  >
+                    {projects.map((project) => (
+                      <MenuItem key={project.code} value={project.code}>
+                        {project.code}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                  <FormHelperText>
+                    {form.formState.errors.invoice_project?.message ||
+                      "Select a project"}
+                  </FormHelperText>
+                </FormControl>
+              )}
+            />
+          </Grid>
+
+          <Grid item xs={12} md={6}>
+            <Controller
+              name="payment_project"
+              control={form.control}
+              render={({ field }) => (
+                <TextField
+                  {...field}
+                  fullWidth
+                  label="Payment Project"
+                  error={!!form.formState.errors.payment_project}
+                  helperText={form.formState.errors.payment_project?.message}
+                />
+              )}
+            />
+          </Grid>
+
+          <Grid item xs={12} md={6}>
+            <Controller
+              name="currency"
+              control={form.control}
+              render={({ field }) => (
+                <FormControl fullWidth error={!!form.formState.errors.currency}>
+                  <InputLabel>Currency</InputLabel>
+                  <Select {...field} label="Currency">
+                    <MenuItem value="IDR">IDR</MenuItem>
+                    <MenuItem value="USD">USD</MenuItem>
+                  </Select>
+                  <FormHelperText>
+                    {form.formState.errors.currency?.message}
+                  </FormHelperText>
+                </FormControl>
+              )}
+            />
+          </Grid>
+
+          <Grid item xs={12} md={6}>
+            <Controller
               name="amount"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Amount</FormLabel>
-                  <FormControl>
-                    <Input
-                      {...field}
-                      type="text"
-                      value={formatNumber(field.value)}
-                      onChange={(e) => {
-                        const value = e.target.value;
-                        if (/^[\d,]*\.?\d*$/.test(value)) {
-                          const unformatted = unformatNumber(value);
-                          field.onChange(unformatted);
-                        }
-                      }}
-                      onBlur={(e) => {
-                        const value = unformatNumber(e.target.value);
-                        if (value && !isNaN(Number(value))) {
-                          field.onChange(value);
-                        }
-                      }}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
               control={form.control}
-              name="po_no"
               render={({ field }) => (
-                <FormItem>
-                  <FormLabel>PO Number</FormLabel>
-                  <FormControl>
-                    <Input
-                      {...field}
-                      onBlur={(e) => {
-                        field.onBlur();
-                        if (e.target.value) {
-                          setShowTable(true);
-                          fetchAdditionalDocs(e.target.value);
-                        } else {
-                          setShowTable(false);
-                          setAdditionalDocs([]);
-                        }
-                      }}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
+                <TextField
+                  fullWidth
+                  label="Amount"
+                  value={formatNumber(field.value)}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (/^[\d,]*\.?\d*$/.test(value)) {
+                      const unformatted = unformatNumber(value);
+                      field.onChange(unformatted);
+                    }
+                  }}
+                  onBlur={(e) => {
+                    field.onBlur();
+                    const value = unformatNumber(e.target.value);
+                    if (value && !isNaN(Number(value))) {
+                      field.onChange(value);
+                    }
+                  }}
+                  error={!!form.formState.errors.amount}
+                  helperText={form.formState.errors.amount?.message}
+                  InputProps={{
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        {form.getValues("currency")}
+                      </InputAdornment>
+                    ),
+                  }}
+                />
               )}
             />
-          </div>
+          </Grid>
+
+          <Grid item xs={12} md={6}>
+            <Controller
+              name="po_no"
+              control={form.control}
+              render={({ field }) => (
+                <TextField
+                  {...field}
+                  fullWidth
+                  label="PO Number"
+                  error={!!form.formState.errors.po_no}
+                  helperText={form.formState.errors.po_no?.message}
+                  onBlur={(e) => {
+                    field.onBlur();
+                    if (e.target.value) {
+                      setShowTable(true);
+                      fetchAdditionalDocs(e.target.value);
+                    } else {
+                      setShowTable(false);
+                      setAdditionalDocs([]);
+                      setSelectedDocs([]);
+                    }
+                  }}
+                />
+              )}
+            />
+          </Grid>
 
           {showTable && (
-            <div className="mt-6">
-              <h3 className="text-sm font-medium mb-4">
+            <Grid item xs={12}>
+              <Typography variant="h6" gutterBottom>
                 Additional Documents for PO: {form.getValues("po_no")}
-              </h3>
-              <div className="relative overflow-x-auto border rounded-lg">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b bg-muted">
-                      <th className="text-left py-3 px-4">
-                        <input
-                          type="checkbox"
-                          className="rounded border-gray-300"
+              </Typography>
+              <TableContainer>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>
+                        <Checkbox
                           checked={
                             selectedDocs.length === additionalDocs.length
                           }
@@ -821,86 +703,89 @@ export default function CreateInvoice({ onSuccess }: CreateInvoiceProps) {
                             }
                           }}
                         />
-                      </th>
-                      <th className="text-left py-3 px-4">Document No</th>
-                      <th className="text-left py-3 px-4">Type</th>
-                      <th className="text-left py-3 px-4">Document Date</th>
-                      <th className="text-left py-3 px-4">Receive Date</th>
-                      <th className="text-left py-3 px-4">Location</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+                      </TableCell>
+                      <TableCell>Document No</TableCell>
+                      <TableCell>Type</TableCell>
+                      <TableCell>Document Date</TableCell>
+                      <TableCell>Receive Date</TableCell>
+                      <TableCell>Location</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
                     {isLoadingDocs ? (
-                      <tr>
-                        <td colSpan={6} className="text-center py-4">
-                          <Loader2 className="w-6 h-6 animate-spin mx-auto" />
-                        </td>
-                      </tr>
+                      <TableRow>
+                        <TableCell colSpan={6} align="center">
+                          <CircularProgress />
+                        </TableCell>
+                      </TableRow>
                     ) : additionalDocs.length === 0 ? (
-                      <tr>
-                        <td
-                          colSpan={6}
-                          className="text-center py-4 text-muted-foreground"
-                        >
+                      <TableRow>
+                        <TableCell colSpan={6} align="center">
                           No additional documents found
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     ) : (
                       additionalDocs.map((doc) => (
-                        <tr key={doc.id} className="border-b hover:bg-muted/50">
-                          <td className="py-3 px-4">
-                            <input
-                              type="checkbox"
-                              className="rounded border-gray-300"
+                        <TableRow key={doc.id}>
+                          <TableCell>
+                            <Checkbox
                               checked={selectedDocs.includes(doc.id)}
                               onChange={() => handleDocumentSelect(doc.id)}
                             />
-                          </td>
-                          <td className="py-3 px-4">{doc.document_number}</td>
-                          <td className="py-3 px-4">
+                          </TableCell>
+                          <TableCell>{doc.document_number}</TableCell>
+                          <TableCell>
                             {doc.type_id === 26 ? "ITO" : "Other"}
-                          </td>
-                          <td className="py-3 px-4">
-                            {format(new Date(doc.document_date), "dd MMM yyyy")}
-                          </td>
-                          <td className="py-3 px-4">
+                          </TableCell>
+                          <TableCell>
+                            {new Date(doc.document_date).toLocaleDateString()}
+                          </TableCell>
+                          <TableCell>
                             {doc.receive_date
-                              ? format(
-                                  new Date(doc.receive_date),
-                                  "dd MMM yyyy"
-                                )
+                              ? new Date(doc.receive_date).toLocaleDateString()
                               : "-"}
-                          </td>
-                          <td className="py-3 px-4">{doc.cur_loc}</td>
-                        </tr>
+                          </TableCell>
+                          <TableCell>{doc.cur_loc}</TableCell>
+                        </TableRow>
                       ))
                     )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Grid>
           )}
 
-          <FormField
-            control={form.control}
-            name="remarks"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Remarks</FormLabel>
-                <FormControl>
-                  <Textarea {...field} className="min-h-[100px]" />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+          <Grid item xs={12}>
+            <Controller
+              name="remarks"
+              control={form.control}
+              render={({ field }) => (
+                <TextField
+                  {...field}
+                  fullWidth
+                  label="Remarks"
+                  multiline
+                  rows={4}
+                  error={!!form.formState.errors.remarks}
+                  helperText={form.formState.errors.remarks?.message}
+                />
+              )}
+            />
+          </Grid>
 
-          <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-            Create Invoice
-          </Button>
-        </form>
-      </Form>
-    </Card>
+          <Grid item xs={12}>
+            <Button
+              type="submit"
+              variant="contained"
+              color="primary"
+              disabled={isSubmitting}
+              startIcon={isSubmitting && <CircularProgress size={20} />}
+            >
+              Create Invoice
+            </Button>
+          </Grid>
+        </Grid>
+      </form>
+    </Paper>
   );
 }

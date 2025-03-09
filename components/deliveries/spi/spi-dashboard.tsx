@@ -9,42 +9,41 @@ import Paper from "@mui/material/Paper";
 import Grid from "@mui/material/Grid";
 import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
-import CardHeader from "@mui/material/CardHeader";
 import Divider from "@mui/material/Divider";
 
 // Icons
-import ReceiptIcon from "@mui/icons-material/Receipt";
-import PendingActionsIcon from "@mui/icons-material/PendingActions";
+import DescriptionIcon from "@mui/icons-material/Description";
+import SendIcon from "@mui/icons-material/Send";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import TrendingUpIcon from "@mui/icons-material/TrendingUp";
+import PendingIcon from "@mui/icons-material/Pending";
 
-export default function InvoiceDashboard() {
+export const SpiDashboard = () => {
   const { mode } = useAppTheme();
 
   // Mock data for dashboard
   const stats = [
     {
-      title: "Total Invoices",
-      value: "1,254",
-      icon: <ReceiptIcon fontSize="large" color="primary" />,
+      title: "Total SPIs",
+      value: "124",
+      icon: <DescriptionIcon fontSize="large" color="primary" />,
       color: "primary.main",
     },
     {
-      title: "Pending",
+      title: "Active",
       value: "45",
-      icon: <PendingActionsIcon fontSize="large" color="warning" />,
+      icon: <SendIcon fontSize="large" color="success" />,
+      color: "success.main",
+    },
+    {
+      title: "Pending",
+      value: "32",
+      icon: <PendingIcon fontSize="large" color="warning" />,
       color: "warning.main",
     },
     {
       title: "Completed",
-      value: "1,209",
-      icon: <CheckCircleIcon fontSize="large" color="success" />,
-      color: "success.main",
-    },
-    {
-      title: "This Month",
-      value: "87",
-      icon: <TrendingUpIcon fontSize="large" color="info" />,
+      value: "47",
+      icon: <CheckCircleIcon fontSize="large" color="info" />,
       color: "info.main",
     },
   ];
@@ -90,7 +89,7 @@ export default function InvoiceDashboard() {
       </Grid>
 
       <Grid container spacing={3} sx={{ mt: 2 }}>
-        <Grid item xs={12} md={8}>
+        <Grid item xs={12} md={6}>
           <Paper
             elevation={2}
             sx={{
@@ -101,7 +100,7 @@ export default function InvoiceDashboard() {
             }}
           >
             <Typography variant="h6" gutterBottom>
-              Recent Activity
+              Recent SPIs
             </Typography>
             <Divider sx={{ mb: 2 }} />
             <Typography
@@ -109,11 +108,11 @@ export default function InvoiceDashboard() {
               color="text.secondary"
               sx={{ textAlign: "center", mt: 10 }}
             >
-              Chart or activity feed will be displayed here
+              Recent SPI documents will be displayed here
             </Typography>
           </Paper>
         </Grid>
-        <Grid item xs={12} md={4}>
+        <Grid item xs={12} md={6}>
           <Paper
             elevation={2}
             sx={{
@@ -124,7 +123,7 @@ export default function InvoiceDashboard() {
             }}
           >
             <Typography variant="h6" gutterBottom>
-              Status Distribution
+              SPI Status Overview
             </Typography>
             <Divider sx={{ mb: 2 }} />
             <Typography
@@ -132,11 +131,11 @@ export default function InvoiceDashboard() {
               color="text.secondary"
               sx={{ textAlign: "center", mt: 10 }}
             >
-              Status pie chart will be displayed here
+              SPI status chart will be displayed here
             </Typography>
           </Paper>
         </Grid>
       </Grid>
     </Box>
   );
-}
+};

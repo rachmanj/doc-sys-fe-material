@@ -3,13 +3,48 @@
 import { useAuth } from "@/hooks/use-auth";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { PageTitle } from "@/components/ui/page-title";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getCookie } from "@/lib/cookies";
-import { Invoice } from "@/types/invoice"; // You'll need to create this type
-import InvoiceList from "@/components/documents/invoices/invoice-list"; // We'll create these components
+import { Invoice } from "@/types/invoice";
+import InvoiceList from "@/components/documents/invoices/invoice-list";
 import InvoiceDashboard from "@/components/documents/invoices/invoice-dashboard";
 import CreateInvoice from "@/components/documents/invoices/create-invoice";
+import { useAppTheme } from "@/components/theme/ThemeProvider";
+
+// Material UI imports
+import Box from "@mui/material/Box";
+import Typography from "@mui/material/Typography";
+import Tabs from "@mui/material/Tabs";
+import Tab from "@mui/material/Tab";
+import Paper from "@mui/material/Paper";
+
+interface TabPanelProps {
+  children?: React.ReactNode;
+  index: number;
+  value: number;
+}
+
+function TabPanel(props: TabPanelProps) {
+  const { children, value, index, ...other } = props;
+
+  return (
+    <div
+      role="tabpanel"
+      hidden={value !== index}
+      id={`invoices-tabpanel-${index}`}
+      aria-labelledby={`invoices-tab-${index}`}
+      {...other}
+    >
+      {value === index && <Box sx={{ pt: 3 }}>{children}</Box>}
+    </div>
+  );
+}
+
+function a11yProps(index: number) {
+  return {
+    id: `invoices-tab-${index}`,
+    "aria-controls": `invoices-tabpanel-${index}`,
+  };
+}
 
 interface SearchParams {
   page?: number;
@@ -24,7 +59,8 @@ interface SearchParams {
 export default function InvoicesPage() {
   const { user, hasPermission } = useAuth();
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState("dashboard");
+  const { mode } = useAppTheme();
+  const [tabValue, setTabValue] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [data, setData] = useState<Invoice[]>([]);
   const [totalRows, setTotalRows] = useState(0);
@@ -57,6 +93,7 @@ export default function InvoicesPage() {
         {
           headers: {
             Authorization: `Bearer ${token}`,
+            Accept: "application/json",
           },
         }
       );
@@ -87,29 +124,44 @@ export default function InvoicesPage() {
     fetchInvoices({ ...params, page: 1 });
   };
 
+  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+    setTabValue(newValue);
+  };
+
   useEffect(() => {
     fetchInvoices();
   }, [perPage]);
 
   return (
-    <div className="space-y-4">
-      <PageTitle
-        title="Invoices Management"
-        subtitle="Manage and track all invoices"
-      />
+    <Box>
+      <Box sx={{ mb: 4 }}>
+        <Typography variant="h4" component="h1" gutterBottom fontWeight="bold">
+          Invoices Management
+        </Typography>
+        <Typography variant="subtitle1" color="text.secondary">
+          Manage and track all invoices
+        </Typography>
+      </Box>
 
-      <Tabs defaultValue="dashboard" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
-          <TabsTrigger value="list">List</TabsTrigger>
-          <TabsTrigger value="create">Create</TabsTrigger>
-        </TabsList>
+      <Paper elevation={2} sx={{ borderRadius: 2 }}>
+        <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
+          <Tabs
+            value={tabValue}
+            onChange={handleTabChange}
+            aria-label="invoices tabs"
+            sx={{ px: 2 }}
+          >
+            <Tab label="Dashboard" {...a11yProps(0)} />
+            <Tab label="List" {...a11yProps(1)} />
+            <Tab label="Create" {...a11yProps(2)} />
+          </Tabs>
+        </Box>
 
-        <TabsContent value="dashboard">
+        <TabPanel value={tabValue} index={0}>
           <InvoiceDashboard />
-        </TabsContent>
+        </TabPanel>
 
-        <TabsContent value="list">
+        <TabPanel value={tabValue} index={1}>
           <InvoiceList
             data={data}
             loading={isLoading}
@@ -125,16 +177,16 @@ export default function InvoicesPage() {
             onSearch={handleSearch}
             searchParams={searchParams}
           />
-        </TabsContent>
+        </TabPanel>
 
-        <TabsContent value="create">
+        <TabPanel value={tabValue} index={2}>
           <CreateInvoice
             onSuccess={() => {
               fetchInvoices(searchParams);
             }}
           />
-        </TabsContent>
-      </Tabs>
-    </div>
+        </TabPanel>
+      </Paper>
+    </Box>
   );
 }

@@ -6,6 +6,7 @@ import { getCookie } from "@/lib/cookies";
 import { useRouter } from "next/navigation";
 import { showToast } from "@/lib/toast";
 import { useAppTheme } from "@/components/theme/ThemeProvider";
+import React from "react";
 
 // Material UI imports
 import Box from "@mui/material/Box";
@@ -47,25 +48,23 @@ interface User {
   project: string;
 }
 
-interface Department {
+interface Supplier {
   id: number;
   name: string;
   code: string;
 }
 
-interface LPD {
+interface SPI {
   id: number;
-  nomor: string;
-  date: string;
-  origin_code: string;
-  destination_code: string;
-  attention_person: string | null;
-  created_by: User;
-  sent_at: string | null;
-  received_at: string | null;
-  received_by: User | null;
-  notes: string | null;
+  spi_number: string;
+  spi_date: string;
+  supplier_id: number;
+  supplier: Supplier;
+  po_number: string | null;
+  project: string | null;
   status: string;
+  remarks: string | null;
+  created_by: User;
   created_at: string;
   updated_at: string;
 }
@@ -73,21 +72,20 @@ interface LPD {
 interface SearchParams {
   page?: number;
   per_page?: number;
-  nomor?: string;
-  origin_code?: string;
-  destination_code?: string;
+  spi_number?: string;
+  po_number?: string;
+  project?: string;
   status?: string;
   date_from?: string;
   date_to?: string;
 }
 
-export const LpdTable = () => {
+export const SpiTable = () => {
   const { mode } = useAppTheme();
   const router = useRouter();
 
   // State for data
-  const [data, setData] = useState<LPD[]>([]);
-  const [departments, setDepartments] = useState<Department[]>([]);
+  const [data, setData] = useState<SPI[]>([]);
   const [loading, setLoading] = useState(false);
 
   // State for pagination
@@ -102,17 +100,36 @@ export const LpdTable = () => {
   });
 
   // Initialize search states
-  const [lpdNumber, setLpdNumber] = useState("");
-  const [originCode, setOriginCode] = useState("");
-  const [destinationCode, setDestinationCode] = useState("");
+  const [spiNumber, setSpiNumber] = useState("");
+  const [poNumber, setPoNumber] = useState("");
+  const [project, setProject] = useState("");
   const [status, setStatus] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
 
+  // Add a ref to track if the component is mounted
+  const isMounted = React.useRef(false);
+
   useEffect(() => {
+    // Set mounted flag
+    isMounted.current = true;
+
+    // Initial data fetch
     fetchData();
-    fetchDepartments();
-  }, [page, rowsPerPage]);
+
+    // Cleanup function
+    return () => {
+      isMounted.current = false;
+    };
+  }, []); // Empty dependency array for initial mount only
+
+  // Effect for pagination and search changes
+  useEffect(() => {
+    // Skip the initial mount since we already fetch in the mount effect
+    if (isMounted.current) {
+      fetchData();
+    }
+  }, [page, rowsPerPage, searchParams]);
 
   const fetchData = async () => {
     try {
@@ -124,20 +141,22 @@ export const LpdTable = () => {
       params.append("page", String(page + 1));
       params.append("per_page", String(rowsPerPage));
 
-      if (searchParams.nomor) params.append("nomor", searchParams.nomor);
-      if (searchParams.origin_code)
-        params.append("origin_code", searchParams.origin_code);
-      if (searchParams.destination_code)
-        params.append("destination_code", searchParams.destination_code);
+      if (searchParams.spi_number)
+        params.append("spi_number", searchParams.spi_number);
+      if (searchParams.po_number)
+        params.append("po_number", searchParams.po_number);
+      if (searchParams.project) params.append("project", searchParams.project);
       if (searchParams.status) params.append("status", searchParams.status);
       if (searchParams.date_from)
         params.append("date_from", searchParams.date_from);
       if (searchParams.date_to) params.append("date_to", searchParams.date_to);
 
+      console.log(`Fetching SPIs with params: ${params.toString()}`);
+
       const response = await fetch(
         `${
           process.env.NEXT_PUBLIC_BACKEND_URL
-        }/api/deliveries/lpds?${params.toString()}`,
+        }/api/deliveries/spis?${params.toString()}`,
         {
           method: "GET",
           headers: {
@@ -147,43 +166,77 @@ export const LpdTable = () => {
         }
       );
 
-      const result = await response.json();
-      if (result.success) {
-        setData(result.data.data);
-        setTotalRows(result.data.total);
-      } else {
+      // Check if response is OK before trying to parse JSON
+      if (!response.ok) {
+        throw new Error(`API request failed with status ${response.status}`);
+      }
+
+      // Check content type to ensure it's JSON
+      const contentType = response.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        console.warn("API response is not JSON:", contentType);
+        setData([]);
+        setTotalRows(0);
         showToast.error({
-          message: result.message || "Failed to fetch LPD data",
+          message: "Server returned an invalid response format",
         });
+        return;
+      }
+
+      // Get the response text first to log in case of error
+      const responseText = await response.text();
+
+      try {
+        // Try to parse the JSON
+        const result = JSON.parse(responseText);
+        console.log("API Response:", result);
+
+        if (result.success) {
+          // Handle Laravel pagination response format
+          if (result.data && typeof result.data === "object") {
+            // The data array is in result.data.data
+            setData(Array.isArray(result.data.data) ? result.data.data : []);
+
+            // Total count is in result.data.total
+            setTotalRows(
+              typeof result.data.total === "number" ? result.data.total : 0
+            );
+
+            // If we need to update the current page based on the response
+            const currentPage = result.data.current_page;
+            if (typeof currentPage === "number" && currentPage > 0) {
+              // Only update if different to avoid infinite loop
+              if (currentPage - 1 !== page) {
+                setPage(currentPage - 1); // Convert 1-based to 0-based
+              }
+            }
+          } else {
+            console.error("Unexpected API response format:", result);
+            setData([]);
+            setTotalRows(0);
+            showToast.error({
+              message: "Received invalid data format from server",
+            });
+          }
+        } else {
+          showToast.error({
+            message: result.message || "Failed to fetch SPI data",
+          });
+        }
+      } catch (parseError) {
+        console.error("Failed to parse API response:", parseError);
+        console.error("Response text:", responseText);
+        setData([]);
+        setTotalRows(0);
+        showToast.error({ message: "Failed to parse server response" });
       }
     } catch (error) {
-      console.error("Error fetching LPD data:", error);
-      showToast.error({ message: "An error occurred while fetching LPD data" });
+      console.error("Error fetching SPI data:", error);
+      showToast.error({ message: "An error occurred while fetching SPI data" });
+      setData([]);
+      setTotalRows(0);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const fetchDepartments = async () => {
-    try {
-      const token = getCookie("token");
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/departments`,
-        {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      const result = await response.json();
-      if (result.success) {
-        setDepartments(result.data);
-      }
-    } catch (error) {
-      console.error("Error fetching departments:", error);
     }
   };
 
@@ -191,57 +244,64 @@ export const LpdTable = () => {
     event: React.MouseEvent<HTMLButtonElement> | null,
     newPage: number
   ) => {
+    // Convert from 0-based (MUI) to 1-based (Laravel)
+    const laravelPage = newPage + 1;
+    console.log(`Changing page from ${page + 1} to ${laravelPage}`);
     setPage(newPage);
   };
 
   const handleRowsPerPageChange = (
     event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
-    setRowsPerPage(parseInt(event.target.value, 10));
-    setPage(0);
+    const newRowsPerPage = parseInt(event.target.value, 10);
+    console.log(
+      `Changing rows per page from ${rowsPerPage} to ${newRowsPerPage}`
+    );
+    setRowsPerPage(newRowsPerPage);
+    setPage(0); // Reset to first page
   };
 
   const handleSearch = () => {
     setPage(0);
-    setSearchParams({
+    const newSearchParams = {
       page: 1,
       per_page: rowsPerPage,
-      nomor: lpdNumber || undefined,
-      origin_code: originCode || undefined,
-      destination_code: destinationCode || undefined,
+      spi_number: spiNumber || undefined,
+      po_number: poNumber || undefined,
+      project: project || undefined,
       status: status || undefined,
       date_from: dateFrom || undefined,
       date_to: dateTo || undefined,
-    });
-    fetchData();
+    };
+    setSearchParams(newSearchParams);
   };
 
   const handleReset = () => {
-    setLpdNumber("");
-    setOriginCode("");
-    setDestinationCode("");
+    setSpiNumber("");
+    setPoNumber("");
+    setProject("");
     setStatus("");
     setDateFrom("");
     setDateTo("");
     setPage(0);
-    setSearchParams({
+    const newSearchParams = {
       page: 1,
       per_page: rowsPerPage,
-    });
-    fetchData();
+    };
+    setSearchParams(newSearchParams);
   };
 
   const handleView = (id: number) => {
-    router.push(`/deliveries/lpd/view/${id}`);
+    router.push(`/deliveries/spi/view/${id}`);
   };
 
   const handleEdit = (id: number) => {
-    router.push(`/deliveries/lpd/edit/${id}`);
+    router.push(`/deliveries/spi/edit/${id}`);
   };
 
   const handlePrint = (id: number) => {
     window.open(
-      `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/deliveries/lpds/print/${id}`,
+      `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/deliveries/spis/print/${id}`,
       "_blank"
     );
   };
@@ -273,13 +333,9 @@ export const LpdTable = () => {
     return <Chip label={status} color={color} size="small" />;
   };
 
-  const getDepartmentName = (code: string) => {
-    const department = departments.find((dept) => dept.code === code);
-    return department ? department.name : code;
-  };
-
   return (
     <Box sx={{ width: "100%" }}>
+      {/* Search filters section */}
       <Paper elevation={2} sx={{ p: 3, mb: 3, borderRadius: 2 }}>
         <Typography variant="h6" gutterBottom>
           Search Filters
@@ -288,10 +344,10 @@ export const LpdTable = () => {
         <Grid container spacing={2}>
           <Grid item xs={12} sm={6} md={3}>
             <TextField
-              label="LPD Number"
+              label="SPI Number"
               fullWidth
-              value={lpdNumber}
-              onChange={(e) => setLpdNumber(e.target.value)}
+              value={spiNumber}
+              onChange={(e) => setSpiNumber(e.target.value)}
               margin="normal"
               variant="outlined"
               size="small"
@@ -306,39 +362,27 @@ export const LpdTable = () => {
           </Grid>
 
           <Grid item xs={12} sm={6} md={3}>
-            <FormControl fullWidth margin="normal" size="small">
-              <InputLabel>Origin</InputLabel>
-              <Select
-                value={originCode}
-                onChange={(e) => setOriginCode(e.target.value)}
-                label="Origin"
-              >
-                <MenuItem value="">All Origins</MenuItem>
-                {departments.map((dept) => (
-                  <MenuItem key={dept.id} value={dept.code}>
-                    {dept.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <TextField
+              label="PO Number"
+              fullWidth
+              value={poNumber}
+              onChange={(e) => setPoNumber(e.target.value)}
+              margin="normal"
+              variant="outlined"
+              size="small"
+            />
           </Grid>
 
           <Grid item xs={12} sm={6} md={3}>
-            <FormControl fullWidth margin="normal" size="small">
-              <InputLabel>Destination</InputLabel>
-              <Select
-                value={destinationCode}
-                onChange={(e) => setDestinationCode(e.target.value)}
-                label="Destination"
-              >
-                <MenuItem value="">All Destinations</MenuItem>
-                {departments.map((dept) => (
-                  <MenuItem key={dept.id} value={dept.code}>
-                    {dept.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <TextField
+              label="Project"
+              fullWidth
+              value={project}
+              onChange={(e) => setProject(e.target.value)}
+              margin="normal"
+              variant="outlined"
+              size="small"
+            />
           </Grid>
 
           <Grid item xs={12} sm={6} md={3}>
@@ -412,18 +456,19 @@ export const LpdTable = () => {
         </Grid>
       </Paper>
 
+      {/* Table section */}
       <Paper elevation={2} sx={{ width: "100%", borderRadius: 2 }}>
         <TableContainer>
-          <Table sx={{ minWidth: 650 }} aria-label="LPD table">
+          <Table sx={{ minWidth: 650 }} aria-label="SPI table">
             <TableHead>
               <TableRow
                 sx={{ backgroundColor: (theme) => theme.palette.action.hover }}
               >
-                <TableCell>LPD Number</TableCell>
+                <TableCell>SPI Number</TableCell>
                 <TableCell>Date</TableCell>
-                <TableCell>Origin</TableCell>
-                <TableCell>Destination</TableCell>
-                <TableCell>Attention</TableCell>
+                <TableCell>Supplier</TableCell>
+                <TableCell>PO Number</TableCell>
+                <TableCell>Project</TableCell>
                 <TableCell>Status</TableCell>
                 <TableCell align="center">Actions</TableCell>
               </TableRow>
@@ -442,22 +487,29 @@ export const LpdTable = () => {
                 <TableRow>
                   <TableCell colSpan={7} align="center" sx={{ py: 3 }}>
                     <Typography variant="body1">
-                      No LPD records found
+                      No SPI records found
+                    </Typography>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{ mt: 1 }}
+                    >
+                      {Object.keys(searchParams).length > 2
+                        ? "Try adjusting your search filters"
+                        : "Create a new SPI to get started"}
                     </Typography>
                   </TableCell>
                 </TableRow>
               ) : (
                 data.map((row) => (
                   <TableRow key={row.id} hover>
-                    <TableCell>{row.nomor}</TableCell>
+                    <TableCell>{row.spi_number}</TableCell>
                     <TableCell>
-                      {format(new Date(row.date), "dd/MM/yyyy")}
+                      {format(new Date(row.spi_date), "dd/MM/yyyy")}
                     </TableCell>
-                    <TableCell>{getDepartmentName(row.origin_code)}</TableCell>
-                    <TableCell>
-                      {getDepartmentName(row.destination_code)}
-                    </TableCell>
-                    <TableCell>{row.attention_person || "-"}</TableCell>
+                    <TableCell>{row.supplier.name}</TableCell>
+                    <TableCell>{row.po_number || "-"}</TableCell>
+                    <TableCell>{row.project || "-"}</TableCell>
                     <TableCell>{getStatusChip(row.status)}</TableCell>
                     <TableCell align="center">
                       <Tooltip title="View">
@@ -501,6 +553,9 @@ export const LpdTable = () => {
           page={page}
           onPageChange={handlePageChange}
           onRowsPerPageChange={handleRowsPerPageChange}
+          labelDisplayedRows={({ from, to, count }) =>
+            `${from}-${to} of ${count !== -1 ? count : `more than ${to}`}`
+          }
         />
       </Paper>
     </Box>

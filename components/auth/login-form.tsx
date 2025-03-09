@@ -3,22 +3,22 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import * as z from "zod";
 import Swal from "sweetalert2";
-import { Loader2 } from "lucide-react";
 import { setCookie } from "@/lib/cookies";
+import { getApiEndpoint } from "@/lib/api";
 
-import { Button } from "@/components/ui/button";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
+// Material UI imports
+import TextField from "@mui/material/TextField";
+import Button from "@mui/material/Button";
+import Box from "@mui/material/Box";
+import CircularProgress from "@mui/material/CircularProgress";
+import InputAdornment from "@mui/material/InputAdornment";
+import IconButton from "@mui/material/IconButton";
+import Visibility from "@mui/icons-material/Visibility";
+import VisibilityOff from "@mui/icons-material/VisibilityOff";
+import LoginIcon from "@mui/icons-material/Login";
 
 const loginSchema = z.object({
   login: z.string().min(1, { message: "Username or email is required" }),
@@ -43,6 +43,7 @@ interface LoginResponse {
 export function LoginForm() {
   const router = useRouter();
   const [isLoading, setIsLoading] = React.useState(false);
+  const [showPassword, setShowPassword] = React.useState(false);
 
   const form = useForm<z.infer<typeof loginSchema>>({
     resolver: zodResolver(loginSchema),
@@ -52,20 +53,21 @@ export function LoginForm() {
     },
   });
 
+  const handleClickShowPassword = () => {
+    setShowPassword(!showPassword);
+  };
+
   async function onSubmit(values: z.infer<typeof loginSchema>) {
     setIsLoading(true);
     try {
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/auth/login`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Accept: "application/json",
-          },
-          body: JSON.stringify(values),
-        }
-      );
+      const response = await fetch(getApiEndpoint("/api/auth/login"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify(values),
+      });
 
       const data: LoginResponse = await response.json();
 
@@ -98,60 +100,84 @@ export function LoginForm() {
   }
 
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
-        <FormField
-          control={form.control}
-          name="login"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel className="text-gray-200">Username or Email</FormLabel>
-              <FormControl>
-                <Input
-                  placeholder="Enter your username or email"
-                  {...field}
-                  className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400 focus:border-blue-500 focus:ring-blue-500"
-                />
-              </FormControl>
-              <FormMessage className="text-red-400" />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="password"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel className="text-gray-200">Password</FormLabel>
-              <FormControl>
-                <Input
-                  placeholder="Enter your password"
-                  type="password"
-                  {...field}
-                  className="bg-gray-700 border-gray-600 text-white placeholder:text-gray-400 focus:border-blue-500 focus:ring-blue-500"
-                />
-              </FormControl>
-              <FormMessage className="text-red-400" />
-            </FormItem>
-          )}
-        />
-        <div className="pt-2">
-          <Button
+    <Box
+      component="form"
+      onSubmit={form.handleSubmit(onSubmit)}
+      sx={{ width: "100%" }}
+    >
+      <Controller
+        control={form.control}
+        name="login"
+        render={({ field, fieldState }) => (
+          <TextField
+            {...field}
+            label="Username or Email"
+            variant="outlined"
+            fullWidth
+            margin="normal"
+            error={!!fieldState.error}
+            helperText={fieldState.error?.message}
             disabled={isLoading}
-            type="submit"
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white transition-colors"
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Signing in...
-              </>
-            ) : (
-              "Sign in"
-            )}
-          </Button>
-        </div>
-      </form>
-    </Form>
+            InputProps={{
+              sx: { borderRadius: 1 },
+            }}
+          />
+        )}
+      />
+
+      <Controller
+        control={form.control}
+        name="password"
+        render={({ field, fieldState }) => (
+          <TextField
+            {...field}
+            label="Password"
+            type={showPassword ? "text" : "password"}
+            variant="outlined"
+            fullWidth
+            margin="normal"
+            error={!!fieldState.error}
+            helperText={fieldState.error?.message}
+            disabled={isLoading}
+            InputProps={{
+              sx: { borderRadius: 1 },
+              endAdornment: (
+                <InputAdornment position="end">
+                  <IconButton
+                    aria-label="toggle password visibility"
+                    onClick={handleClickShowPassword}
+                    edge="end"
+                  >
+                    {showPassword ? <VisibilityOff /> : <Visibility />}
+                  </IconButton>
+                </InputAdornment>
+              ),
+            }}
+          />
+        )}
+      />
+
+      <Button
+        type="submit"
+        fullWidth
+        variant="contained"
+        disabled={isLoading}
+        sx={{
+          mt: 3,
+          mb: 2,
+          py: 1.5,
+          borderRadius: 1,
+        }}
+        startIcon={
+          isLoading ? (
+            <CircularProgress size={20} color="inherit" />
+          ) : (
+            <LoginIcon />
+          )
+        }
+      >
+        {isLoading ? "Signing in..." : "Sign in"}
+      </Button>
+    </Box>
   );
 }

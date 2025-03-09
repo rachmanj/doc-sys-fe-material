@@ -1,13 +1,33 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import DataTable from "react-data-table-component";
-import { Button } from "@/components/ui/button";
-import { Plus, Pencil, Trash } from "lucide-react";
 import { PermissionDialog } from "./permission-dialog";
 import Swal from "sweetalert2";
 import { getCookie } from "@/lib/cookies";
-import { PageTitle } from "@/components/ui/page-title";
+import { getApiEndpoint } from "@/lib/api";
+import { useAppTheme } from "@/components/theme/ThemeProvider";
+
+// Material UI imports
+import Table from "@mui/material/Table";
+import TableBody from "@mui/material/TableBody";
+import TableCell from "@mui/material/TableCell";
+import TableContainer from "@mui/material/TableContainer";
+import TableHead from "@mui/material/TableHead";
+import TableRow from "@mui/material/TableRow";
+import TablePagination from "@mui/material/TablePagination";
+import Paper from "@mui/material/Paper";
+import Button from "@mui/material/Button";
+import IconButton from "@mui/material/IconButton";
+import Tooltip from "@mui/material/Tooltip";
+import Box from "@mui/material/Box";
+import Typography from "@mui/material/Typography";
+import CircularProgress from "@mui/material/CircularProgress";
+import AddIcon from "@mui/icons-material/Add";
+import EditIcon from "@mui/icons-material/Edit";
+import DeleteIcon from "@mui/icons-material/Delete";
+import TextField from "@mui/material/TextField";
+import InputAdornment from "@mui/material/InputAdornment";
+import SearchIcon from "@mui/icons-material/Search";
 
 interface Permission {
   id: string;
@@ -24,7 +44,11 @@ interface PaginatedResponse {
 }
 
 export function PermissionsTable() {
+  const { mode } = useAppTheme();
   const [permissions, setPermissions] = useState<Permission[]>([]);
+  const [filteredPermissions, setFilteredPermissions] = useState<Permission[]>(
+    []
+  );
   const [open, setOpen] = useState(false);
   const [editingPermission, setEditingPermission] = useState<Permission | null>(
     null
@@ -32,12 +56,13 @@ export function PermissionsTable() {
   const [loading, setLoading] = useState(true);
   const [totalRows, setTotalRows] = useState(0);
   const [perPage, setPerPage] = useState(10);
-  const [currentPage, setCurrentPage] = useState(1);
+  const [page, setPage] = useState(0);
+  const [searchQuery, setSearchQuery] = useState("");
 
-  const fetchPermissions = async (page: number) => {
+  const fetchPermissions = async () => {
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/permissions?page=${page}&per_page=${perPage}`,
+        getApiEndpoint(`/api/permissions?per_page=100`), // Get more permissions at once for client-side filtering
         {
           headers: {
             Authorization: `Bearer ${getCookie("token")}`,
@@ -46,18 +71,42 @@ export function PermissionsTable() {
         }
       );
 
-      if (!response.ok) throw new Error("Failed to fetch");
+      if (!response.ok) {
+        throw new Error("Failed to fetch permissions");
+      }
 
       const data: PaginatedResponse = await response.json();
       setPermissions(data.data);
-      setTotalRows(data.total);
-      setCurrentPage(data.current_page);
+      setFilteredPermissions(data.data);
+      setTotalRows(data.data.length);
+      setLoading(false);
     } catch (error) {
-      Swal.fire("Error!", "Failed to fetch permissions.", "error");
-    } finally {
+      console.error("Error fetching permissions:", error);
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchPermissions();
+  }, []);
+
+  // Filter permissions when search query changes
+  useEffect(() => {
+    if (searchQuery.trim() === "") {
+      setFilteredPermissions(permissions);
+      setTotalRows(permissions.length);
+    } else {
+      const lowercaseQuery = searchQuery.toLowerCase();
+      const filtered = permissions.filter(
+        (permission) =>
+          permission.name.toLowerCase().includes(lowercaseQuery) ||
+          permission.guard_name.toLowerCase().includes(lowercaseQuery)
+      );
+      setFilteredPermissions(filtered);
+      setTotalRows(filtered.length);
+    }
+    setPage(0); // Reset to first page when filtering
+  }, [searchQuery, permissions]);
 
   const handleDelete = async (id: string) => {
     const result = await Swal.fire({
@@ -65,160 +114,169 @@ export function PermissionsTable() {
       text: "You won't be able to revert this!",
       icon: "warning",
       showCancelButton: true,
-      confirmButtonColor: "#3085d6",
-      cancelButtonColor: "#d33",
+      confirmButtonColor: "#d33",
+      cancelButtonColor: "#3085d6",
       confirmButtonText: "Yes, delete it!",
     });
 
     if (result.isConfirmed) {
       try {
-        const response = await fetch(
-          `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/permissions/${id}`,
-          {
-            method: "DELETE",
-            headers: {
-              Authorization: `Bearer ${getCookie("token")}`,
-            },
-          }
-        );
+        const response = await fetch(getApiEndpoint(`/api/permissions/${id}`), {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${getCookie("token")}`,
+            Accept: "application/json",
+          },
+        });
 
-        if (response.ok) {
-          await fetchPermissions(1);
-          Swal.fire("Deleted!", "Permission has been deleted.", "success");
+        if (!response.ok) {
+          throw new Error("Failed to delete permission");
         }
+
+        Swal.fire("Deleted!", "Permission has been deleted.", "success");
+        fetchPermissions();
       } catch (error) {
-        Swal.fire("Error!", "Something went wrong.", "error");
+        console.error("Error deleting permission:", error);
+        Swal.fire("Error!", "Failed to delete permission.", "error");
       }
     }
   };
 
-  const columns = [
-    {
-      name: "#",
-      cell: (row: Permission, index: number) =>
-        (currentPage - 1) * perPage + index + 1,
-      width: "70px",
-    },
-    {
-      name: "Name",
-      selector: (row: Permission) => row.name,
-      sortable: true,
-    },
-    {
-      name: "Guard Name",
-      selector: (row: Permission) => row.guard_name,
-      sortable: true,
-    },
-    {
-      name: "Actions",
-      cell: (row: Permission) => (
-        <div className="flex space-x-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              setEditingPermission(row);
-              setOpen(true);
-            }}
-          >
-            <Pencil className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => handleDelete(row.id)}
-          >
-            <Trash className="h-4 w-4" />
-          </Button>
-        </div>
-      ),
-      width: "120px",
-    },
-  ];
-
-  const handlePageChange = (page: number) => {
-    fetchPermissions(page);
+  const handleEdit = (permission: Permission) => {
+    setEditingPermission(permission);
+    setOpen(true);
   };
 
-  const handlePerRowsChange = async (newPerPage: number, page: number) => {
-    setPerPage(newPerPage);
-    fetchPermissions(page);
+  const handlePageChange = (
+    event: React.MouseEvent<HTMLButtonElement> | null,
+    newPage: number
+  ) => {
+    setPage(newPage);
   };
 
-  useEffect(() => {
-    fetchPermissions(1);
-  }, []);
+  const handlePerRowsChange = (
+    event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => {
+    setPerPage(parseInt(event.target.value, 10));
+    setPage(0);
+  };
 
-  const customStyles = {
-    headRow: {
-      style: {
-        backgroundColor: "#f9fafb",
-        borderTopWidth: "1px",
-        borderTopColor: "#e5e7eb",
-      },
-    },
-    headCells: {
-      style: {
-        fontSize: "0.875rem",
-        fontWeight: "600",
-        color: "#374151",
-        paddingLeft: "1rem",
-        paddingRight: "1rem",
-      },
-    },
-    rows: {
-      style: {
-        fontSize: "0.875rem",
-        color: "#374151",
-        backgroundColor: "white",
-        borderBottom: "1px solid #e5e7eb",
-      },
-      highlightOnHoverStyle: {
-        backgroundColor: "#f9fafb",
-      },
-    },
-    cells: {
-      style: {
-        paddingLeft: "1rem",
-        paddingRight: "1rem",
-      },
-    },
+  // Get current page of data
+  const getCurrentPageData = () => {
+    const startIndex = page * perPage;
+    const endIndex = startIndex + perPage;
+    return filteredPermissions.slice(startIndex, endIndex);
   };
 
   return (
     <>
-      <PageTitle title="Permissions" subtitle="Manage system permissions">
-        <Button onClick={() => setOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
+      <Box sx={{ display: "flex", justifyContent: "space-between", mb: 3 }}>
+        <TextField
+          placeholder="Search permissions..."
+          variant="outlined"
+          size="small"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          sx={{ width: "300px" }}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon fontSize="small" />
+              </InputAdornment>
+            ),
+          }}
+        />
+        <Button
+          variant="contained"
+          startIcon={<AddIcon />}
+          onClick={() => {
+            setEditingPermission(null);
+            setOpen(true);
+          }}
+        >
           Add Permission
         </Button>
-      </PageTitle>
+      </Box>
 
-      <div className="rounded-md border">
-        <DataTable
-          columns={columns}
-          data={permissions}
-          progressPending={loading}
-          pagination
-          paginationServer
-          paginationTotalRows={totalRows}
-          onChangeRowsPerPage={handlePerRowsChange}
-          onChangePage={handlePageChange}
-          customStyles={customStyles}
+      <Paper elevation={2} sx={{ borderRadius: 2, overflow: "hidden" }}>
+        <TableContainer>
+          <Table sx={{ minWidth: 650 }} aria-label="permissions table">
+            <TableHead>
+              <TableRow>
+                <TableCell>Name</TableCell>
+                <TableCell>Guard</TableCell>
+                <TableCell align="right">Actions</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={3} align="center" sx={{ py: 3 }}>
+                    <CircularProgress size={30} />
+                  </TableCell>
+                </TableRow>
+              ) : filteredPermissions.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={3} align="center" sx={{ py: 3 }}>
+                    <Typography variant="body1">
+                      No permissions found
+                    </Typography>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                getCurrentPageData().map((permission) => (
+                  <TableRow key={permission.id} hover>
+                    <TableCell>
+                      <Typography variant="body1">{permission.name}</Typography>
+                    </TableCell>
+                    <TableCell>{permission.guard_name}</TableCell>
+                    <TableCell align="right">
+                      <Tooltip title="Edit permission">
+                        <IconButton
+                          aria-label="edit"
+                          onClick={() => handleEdit(permission)}
+                          size="small"
+                          color="primary"
+                        >
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Delete permission">
+                        <IconButton
+                          aria-label="delete"
+                          onClick={() => handleDelete(permission.id)}
+                          size="small"
+                          color="error"
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+        <TablePagination
+          component="div"
+          count={totalRows}
+          page={page}
+          onPageChange={handlePageChange}
+          rowsPerPage={perPage}
+          onRowsPerPageChange={handlePerRowsChange}
+          rowsPerPageOptions={[5, 10, 25, 50]}
         />
-      </div>
+      </Paper>
+
       <PermissionDialog
         open={open}
-        setOpen={setOpen}
+        onOpenChange={setOpen}
         permission={editingPermission}
-        onClose={() => {
-          setEditingPermission(null);
+        onSuccess={() => {
+          fetchPermissions();
           setOpen(false);
-        }}
-        onSuccess={async () => {
-          await fetchPermissions(1);
           setEditingPermission(null);
-          setOpen(false);
         }}
       />
     </>
