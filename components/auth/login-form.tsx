@@ -8,6 +8,7 @@ import * as z from "zod";
 import Swal from "sweetalert2";
 import { setCookie } from "@/lib/cookies";
 import { getApiEndpoint } from "@/lib/api";
+import axios from "axios";
 
 // Material UI imports
 import TextField from "@mui/material/TextField";
@@ -60,28 +61,30 @@ export function LoginForm() {
   async function onSubmit(values: z.infer<typeof loginSchema>) {
     setIsLoading(true);
     try {
-      const response = await fetch(getApiEndpoint("/api/auth/login"), {
+      console.log("Sending to backend:", values);
+
+      // Use fetch with credentials included
+      const response = await fetch("http://localhost:8000/api/auth/login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Accept: "application/json",
+          "X-Requested-With": "XMLHttpRequest",
         },
+        credentials: "include", // Include cookies in the request
         body: JSON.stringify(values),
       });
 
-      const data: LoginResponse = await response.json();
+      console.log("Response status:", response.status);
 
       if (!response.ok) {
-        if (response.status === 422 && data.errors) {
-          Swal.fire({
-            icon: "error",
-            title: "Validation Error",
-            text: Object.values(data.errors).flat().join("\n"),
-          });
-          return;
-        }
-        throw new Error("Login failed");
+        const errorText = await response.text();
+        console.error("Error response:", errorText);
+        throw new Error(`Login failed: ${response.status} ${errorText}`);
       }
+
+      const data: LoginResponse = await response.json();
+      console.log("Response from backend:", data);
 
       if (data.status === "success") {
         setCookie("token", data.token, 7);
@@ -89,10 +92,13 @@ export function LoginForm() {
         router.push("/dashboard");
       }
     } catch (error) {
+      console.error("Login error:", error);
+
+      // Handle error
       Swal.fire({
         icon: "error",
         title: "Error",
-        text: "Invalid credentials",
+        text: error instanceof Error ? error.message : "Invalid credentials",
       });
     } finally {
       setIsLoading(false);

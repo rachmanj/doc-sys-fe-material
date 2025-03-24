@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { getCookie } from "@/lib/cookies";
@@ -19,6 +19,7 @@ import {
   CreateInvoiceFormValues,
 } from "@/schemas/create-invoice-schema";
 import InvoiceAttachments from "@/components/documents/invoices/invoice-attachments";
+import React from "react";
 
 // Material UI imports
 import Box from "@mui/material/Box";
@@ -47,6 +48,9 @@ import Tooltip from "@mui/material/Tooltip";
 import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
 import Divider from "@mui/material/Divider";
+import ListSubheader from "@mui/material/ListSubheader";
+import { ListChildComponentProps, FixedSizeList } from "react-window";
+import Popper from "@mui/material/Popper";
 
 // Icons
 import RefreshIcon from "@mui/icons-material/Refresh";
@@ -184,6 +188,61 @@ function a11yProps(index: number) {
   };
 }
 
+// Add this component for virtualized select options
+const ITEM_HEIGHT = 48;
+const ITEM_PADDING_TOP = 8;
+
+interface VirtualizedMenuItemsProps {
+  options: any[];
+  getOptionLabel: (option: any) => string;
+  renderOption?: (option: any) => React.ReactNode;
+  getOptionKey?: (option: any) => string | number;
+}
+
+function VirtualizedMenuItems({
+  options,
+  getOptionLabel,
+  renderOption,
+  getOptionKey,
+}: VirtualizedMenuItemsProps) {
+  const renderRow = (props: ListChildComponentProps) => {
+    const { index, style } = props;
+    const option = options[index];
+    const key = getOptionKey ? getOptionKey(option) : index;
+
+    return (
+      <MenuItem key={key} value={option.id?.toString()} style={style}>
+        {getOptionLabel(option)}
+      </MenuItem>
+    );
+  };
+
+  return (
+    <FixedSizeList
+      height={Math.min(
+        ITEM_HEIGHT * 4.5 + ITEM_PADDING_TOP,
+        ITEM_HEIGHT * options.length + ITEM_PADDING_TOP
+      )}
+      width="100%"
+      itemSize={ITEM_HEIGHT}
+      itemCount={options.length}
+      overscanCount={5}
+    >
+      {renderRow}
+    </FixedSizeList>
+  );
+}
+
+// Custom Popper component for Autocomplete
+const CustomPopper = (props: any) => {
+  return (
+    <Popper
+      {...props}
+      style={{ zIndex: 1301, width: "auto", minWidth: props.style?.width }}
+    />
+  );
+};
+
 export default function EditInvoice({
   invoiceId,
   onSuccess,
@@ -210,6 +269,7 @@ export default function EditInvoice({
   const [openInvoiceProject, setOpenInvoiceProject] = useState(false);
   const [fieldUpdates, setFieldUpdates] = useState<FieldUpdate>({});
 
+  // Memoize form to prevent unnecessary re-renders
   const form = useForm<CreateInvoiceFormValues>({
     resolver: zodResolver(createInvoiceSchema),
     defaultValues: {
@@ -227,6 +287,49 @@ export default function EditInvoice({
       payment_project: "",
     },
   });
+
+  // Memoize the sorted projects to prevent re-sorting on every render
+  const sortedProjects = useMemo(() => {
+    return [...projects].sort((a, b) => a.code.localeCompare(b.code));
+  }, [projects]);
+
+  // Memoize handlers to prevent unnecessary re-renders
+  const handleSupplierChange = useCallback(
+    async (_: React.SyntheticEvent, newValue: Supplier | null) => {
+      const supplierId = newValue ? newValue.id.toString() : "";
+      form.setValue("supplier_id", supplierId);
+
+      // Fetch and set payment project when supplier changes
+      if (supplierId) {
+        const paymentProject = await fetchSupplierPaymentProject(supplierId);
+        if (paymentProject) {
+          console.log("Setting payment project to:", paymentProject);
+          form.setValue("payment_project", paymentProject, {
+            shouldValidate: true,
+          });
+        } else {
+          // Clear payment project if none is returned
+          form.setValue("payment_project", "", {
+            shouldValidate: true,
+          });
+        }
+      } else {
+        // Clear payment project if no supplier is selected
+        form.setValue("payment_project", "", {
+          shouldValidate: true,
+        });
+      }
+    },
+    [form]
+  );
+
+  const handleDocumentSelect = useCallback((docId: number) => {
+    setSelectedDocs((prev) =>
+      prev.includes(docId)
+        ? prev.filter((id) => id !== docId)
+        : [...prev, docId]
+    );
+  }, []);
 
   const fetchSuppliers = async () => {
     try {
@@ -306,7 +409,12 @@ export default function EditInvoice({
       }
 
       const result = await response.json();
-      setProjects(result || []);
+      // Extract projects from the data property and sort by code
+      const projectsData = result.data || [];
+      const sortedProjects = [...projectsData].sort((a, b) =>
+        a.code.localeCompare(b.code)
+      );
+      setProjects(sortedProjects);
     } catch (error) {
       console.error("Error fetching projects:", error);
       Swal.fire({
@@ -315,6 +423,49 @@ export default function EditInvoice({
       });
     } finally {
       setIsLoadingProjects(false);
+    }
+  };
+
+  const fetchSupplierPaymentProject = async (supplierId: string) => {
+    try {
+      const token = getCookie("token");
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/master/suppliers/get-payment-project?supplier_id=${supplierId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch supplier payment project");
+      }
+
+      const result = await response.json();
+      console.log("Payment project response:", result);
+
+      // Check if the response has a data property with an array of payment projects
+      if (
+        result.success &&
+        result.data &&
+        Array.isArray(result.data) &&
+        result.data.length > 0
+      ) {
+        // Return the first payment project code from the array
+        return result.data[0];
+      } else if (result.payment_project) {
+        // Fallback to direct payment_project property for backward compatibility
+        return result.payment_project;
+      }
+      return null;
+    } catch (error) {
+      console.error("Error fetching supplier payment project:", error);
+      toast.error("Failed to load supplier payment project", {
+        position: "top-right",
+        autoClose: 5000,
+      });
+      return null;
     }
   };
 
@@ -350,14 +501,6 @@ export default function EditInvoice({
     }
   };
 
-  const handleDocumentSelect = (docId: number) => {
-    setSelectedDocs((prev) =>
-      prev.includes(docId)
-        ? prev.filter((id) => id !== docId)
-        : [...prev, docId]
-    );
-  };
-
   const fetchInvoiceData = async () => {
     try {
       setIsLoading(true);
@@ -383,18 +526,18 @@ export default function EditInvoice({
 
         // Set form values
         form.reset({
-          supplier_id: invoiceData.supplier_id.toString(),
-          type_id: invoiceData.type_id.toString(),
-          invoice_number: invoiceData.invoice_number,
-          invoice_date: invoiceData.invoice_date,
-          receive_date: invoiceData.receive_date,
-          receive_project: invoiceData.receive_project,
-          invoice_project: invoiceData.invoice_project,
-          payment_project: invoiceData.payment_project,
-          currency: invoiceData.currency,
-          amount: invoiceData.amount.toString(),
-          po_no: invoiceData.po_no,
-          remarks: invoiceData.remarks,
+          supplier_id: invoiceData.supplier_id?.toString() || "",
+          type_id: invoiceData.type_id?.toString() || "",
+          invoice_number: invoiceData.invoice_number || "",
+          invoice_date: invoiceData.invoice_date || "",
+          receive_date: invoiceData.receive_date || "",
+          receive_project: invoiceData.receive_project || "",
+          invoice_project: invoiceData.invoice_project || "",
+          payment_project: invoiceData.payment_project || "",
+          currency: invoiceData.currency || "IDR",
+          amount: invoiceData.amount?.toString() || "",
+          po_no: invoiceData.po_no || "",
+          remarks: invoiceData.remarks || "",
         });
 
         // If there's a PO number, fetch additional documents
@@ -504,7 +647,7 @@ export default function EditInvoice({
         onSuccess();
       } else {
         const errorMessage = result.message || "Failed to update invoice";
-        console.error(errorMessage);
+        console.error("API error:", errorMessage);
         toast.error(errorMessage, {
           position: "top-right",
           autoClose: 5000,
@@ -517,14 +660,19 @@ export default function EditInvoice({
     } catch (error) {
       console.error("Error updating invoice:", error);
       // Use react-toastify for error notifications
-      toast.error("Failed to update invoice. Please try again.", {
-        position: "top-right",
-        autoClose: 5000,
-        hideProgressBar: false,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-      });
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Failed to update invoice. Please try again.",
+        {
+          position: "top-right",
+          autoClose: 5000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+        }
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -614,6 +762,12 @@ export default function EditInvoice({
     }
   };
 
+  // Memoize the supplier options
+  const supplierOptions = useMemo(() => suppliers, [suppliers]);
+
+  // Memoize the invoice type options
+  const invoiceTypeOptions = useMemo(() => invoiceTypes, [invoiceTypes]);
+
   if (isLoading) {
     return (
       <Box
@@ -663,22 +817,55 @@ export default function EditInvoice({
                           value={
                             suppliers.find(
                               (s) => s.id.toString() === field.value
-                            ) || null
+                            ) || undefined
                           }
-                          onChange={(_, newValue) => {
-                            field.onChange(
-                              newValue ? newValue.id.toString() : ""
-                            );
-                          }}
-                          options={suppliers}
+                          onChange={handleSupplierChange}
+                          options={supplierOptions}
                           getOptionLabel={(option) => {
                             if (!option) return "";
                             return `${option.name} (${option.sap_code})`;
+                          }}
+                          renderOption={(props, option) => (
+                            <li {...props}>
+                              <Box
+                                sx={{
+                                  display: "flex",
+                                  flexDirection: "column",
+                                }}
+                              >
+                                <Typography variant="body1">
+                                  {option.name}
+                                </Typography>
+                                <Typography
+                                  variant="caption"
+                                  color="text.secondary"
+                                >
+                                  {option.sap_code}
+                                </Typography>
+                              </Box>
+                            </li>
+                          )}
+                          filterOptions={(options, state) => {
+                            const inputValue = state.inputValue
+                              .toLowerCase()
+                              .trim();
+                            if (!inputValue) return options;
+
+                            return options.filter(
+                              (option) =>
+                                option.name
+                                  .toLowerCase()
+                                  .includes(inputValue) ||
+                                option.sap_code
+                                  .toLowerCase()
+                                  .includes(inputValue)
+                            );
                           }}
                           renderInput={(params) => (
                             <TextField
                               {...params}
                               label="Supplier"
+                              placeholder="Search supplier..."
                               error={!!form.formState.errors.supplier_id}
                               helperText={
                                 form.formState.errors.supplier_id?.message
@@ -710,6 +897,19 @@ export default function EditInvoice({
                           )}
                           loading={isLoadingSuppliers}
                           disabled={isLoadingSuppliers}
+                          disablePortal={false}
+                          openOnFocus
+                          blurOnSelect
+                          PopperComponent={CustomPopper}
+                          sx={{
+                            "& .MuiAutocomplete-inputRoot": {
+                              paddingLeft: "12px !important",
+                              borderRadius: 1,
+                            },
+                            "& .MuiAutocomplete-listbox": {
+                              maxHeight: "200px",
+                            },
+                          }}
                         />
                       </FormControl>
                     )}
@@ -729,22 +929,30 @@ export default function EditInvoice({
                           value={
                             invoiceTypes.find(
                               (t) => t.id.toString() === field.value
-                            ) || null
+                            ) || undefined
                           }
                           onChange={(_, newValue) => {
                             field.onChange(
                               newValue ? newValue.id.toString() : ""
                             );
                           }}
-                          options={invoiceTypes}
+                          options={invoiceTypeOptions}
                           getOptionLabel={(option) => {
                             if (!option) return "";
                             return option.type_name;
                           }}
+                          renderOption={(props, option) => (
+                            <li {...props}>
+                              <Typography variant="body1">
+                                {option.type_name}
+                              </Typography>
+                            </li>
+                          )}
                           renderInput={(params) => (
                             <TextField
                               {...params}
                               label="Invoice Type"
+                              placeholder="Search invoice type..."
                               error={!!form.formState.errors.type_id}
                               helperText={
                                 form.formState.errors.type_id?.message
@@ -776,6 +984,19 @@ export default function EditInvoice({
                           )}
                           loading={isLoadingInvoiceTypes}
                           disabled={isLoadingInvoiceTypes}
+                          disablePortal={false}
+                          openOnFocus
+                          blurOnSelect
+                          PopperComponent={CustomPopper}
+                          sx={{
+                            "& .MuiAutocomplete-inputRoot": {
+                              paddingLeft: "12px !important",
+                              borderRadius: 1,
+                            },
+                            "& .MuiAutocomplete-listbox": {
+                              maxHeight: "200px",
+                            },
+                          }}
                         />
                       </FormControl>
                     )}
@@ -955,20 +1176,37 @@ export default function EditInvoice({
                       >
                         <Autocomplete
                           value={
-                            projects.find((p) => p.code === field.value) || null
+                            sortedProjects.find(
+                              (p) => p.code === field.value
+                            ) || undefined
                           }
                           onChange={(_, newValue) => {
                             field.onChange(newValue ? newValue.code : "");
                           }}
-                          options={projects}
+                          options={sortedProjects}
                           getOptionLabel={(option) => {
                             if (!option) return "";
                             return option.code;
                           }}
+                          renderOption={(props, option) => (
+                            <li {...props}>
+                              <Box
+                                sx={{
+                                  display: "flex",
+                                  flexDirection: "column",
+                                }}
+                              >
+                                <Typography variant="body1">
+                                  {option.code}
+                                </Typography>
+                              </Box>
+                            </li>
+                          )}
                           renderInput={(params) => (
                             <TextField
                               {...params}
                               label="Invoice Project"
+                              placeholder="Search project..."
                               error={!!form.formState.errors.invoice_project}
                               helperText={
                                 form.formState.errors.invoice_project?.message
@@ -1001,6 +1239,19 @@ export default function EditInvoice({
                           )}
                           loading={isLoadingProjects}
                           disabled={isLoadingProjects}
+                          disablePortal={false}
+                          openOnFocus
+                          blurOnSelect
+                          PopperComponent={CustomPopper}
+                          sx={{
+                            "& .MuiAutocomplete-inputRoot": {
+                              paddingLeft: "12px !important",
+                              borderRadius: 1,
+                            },
+                            "& .MuiAutocomplete-listbox": {
+                              maxHeight: "200px",
+                            },
+                          }}
                         />
                       </FormControl>
                     )}
@@ -1012,30 +1263,90 @@ export default function EditInvoice({
                     name="payment_project"
                     control={form.control}
                     render={({ field }) => (
-                      <TextField
-                        {...field}
+                      <FormControl
                         fullWidth
-                        label="Payment Project"
                         error={!!form.formState.errors.payment_project}
-                        helperText={
-                          form.formState.errors.payment_project?.message
-                        }
-                        InputProps={{
-                          endAdornment: (
-                            <InputAdornment position="end">
-                              <UpdateButton
-                                fieldName="payment project"
-                                isSubmitting={
-                                  fieldUpdates.payment_project?.isSubmitting
-                                }
-                                onClick={() =>
-                                  handleFieldUpdate("payment_project")
-                                }
-                              />
-                            </InputAdornment>
-                          ),
-                        }}
-                      />
+                      >
+                        <Autocomplete
+                          value={
+                            sortedProjects.find(
+                              (p) => p.code === field.value
+                            ) || undefined
+                          }
+                          onChange={(_, newValue) => {
+                            field.onChange(newValue ? newValue.code : "");
+                          }}
+                          options={sortedProjects}
+                          getOptionLabel={(option) => {
+                            if (!option) return "";
+                            return option.code;
+                          }}
+                          renderOption={(props, option) => (
+                            <li {...props}>
+                              <Box
+                                sx={{
+                                  display: "flex",
+                                  flexDirection: "column",
+                                }}
+                              >
+                                <Typography variant="body1">
+                                  {option.code}
+                                </Typography>
+                              </Box>
+                            </li>
+                          )}
+                          renderInput={(params) => (
+                            <TextField
+                              {...params}
+                              label="Payment Project"
+                              placeholder="Search project..."
+                              error={!!form.formState.errors.payment_project}
+                              helperText={
+                                form.formState.errors.payment_project?.message
+                              }
+                              InputProps={{
+                                ...params.InputProps,
+                                endAdornment: (
+                                  <>
+                                    {isLoadingProjects ? (
+                                      <CircularProgress size={20} />
+                                    ) : (
+                                      params.InputProps.endAdornment
+                                    )}
+                                    <InputAdornment position="end">
+                                      <UpdateButton
+                                        fieldName="payment project"
+                                        isSubmitting={
+                                          fieldUpdates.payment_project
+                                            ?.isSubmitting
+                                        }
+                                        onClick={() =>
+                                          handleFieldUpdate("payment_project")
+                                        }
+                                      />
+                                    </InputAdornment>
+                                  </>
+                                ),
+                              }}
+                            />
+                          )}
+                          loading={isLoadingProjects}
+                          disabled={isLoadingProjects}
+                          disablePortal={false}
+                          openOnFocus
+                          blurOnSelect
+                          PopperComponent={CustomPopper}
+                          sx={{
+                            "& .MuiAutocomplete-inputRoot": {
+                              paddingLeft: "12px !important",
+                              borderRadius: 1,
+                            },
+                            "& .MuiAutocomplete-listbox": {
+                              maxHeight: "200px",
+                            },
+                          }}
+                        />
+                      </FormControl>
                     )}
                   />
                 </Grid>
@@ -1106,7 +1417,7 @@ export default function EditInvoice({
                       <TextField
                         fullWidth
                         label="Amount"
-                        value={formatNumber(field.value)}
+                        value={formatNumber(field.value || "")}
                         onChange={(e) => {
                           const value = e.target.value;
                           if (/^[\d,]*\.?\d*$/.test(value)) {

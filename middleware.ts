@@ -7,11 +7,14 @@ export function middleware(request: NextRequest) {
     request.nextUrl.pathname.startsWith("/login") ||
     request.nextUrl.pathname.startsWith("/register");
 
-  // If accessing root path, redirect to dashboard or login
+  // If accessing root path, allow access to landing page
   if (request.nextUrl.pathname === "/") {
-    return token
-      ? NextResponse.redirect(new URL("/dashboard", request.url))
-      : NextResponse.redirect(new URL("/login", request.url));
+    // If user is authenticated, redirect to dashboard
+    if (token) {
+      return NextResponse.redirect(new URL("/dashboard", request.url));
+    }
+    // If not authenticated, allow access to landing page
+    return NextResponse.next();
   }
 
   // If trying to access auth pages while logged in, redirect to dashboard

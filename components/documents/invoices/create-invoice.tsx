@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
+import React from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -29,7 +30,7 @@ import Button from "@mui/material/Button";
 import FormControl from "@mui/material/FormControl";
 import FormHelperText from "@mui/material/FormHelperText";
 import InputLabel from "@mui/material/InputLabel";
-import Select from "@mui/material/Select";
+import Select, { SelectChangeEvent } from "@mui/material/Select";
 import MenuItem from "@mui/material/MenuItem";
 import Autocomplete from "@mui/material/Autocomplete";
 import CircularProgress from "@mui/material/CircularProgress";
@@ -44,6 +45,9 @@ import TableRow from "@mui/material/TableRow";
 import Checkbox from "@mui/material/Checkbox";
 import Alert from "@mui/material/Alert";
 import InputAdornment from "@mui/material/InputAdornment";
+import ListSubheader from "@mui/material/ListSubheader";
+import { ListChildComponentProps, FixedSizeList } from "react-window";
+import Popper from "@mui/material/Popper";
 
 // Icons
 import SaveIcon from "@mui/icons-material/Save";
@@ -88,6 +92,20 @@ const getUserFromLocalStorage = () => {
   return null;
 };
 
+// Replace VirtualizedMenuItems with a simpler approach
+const ITEM_HEIGHT = 48;
+const ITEM_PADDING_TOP = 8;
+
+// Custom Popper component for Autocomplete
+const CustomPopper = (props: any) => {
+  return (
+    <Popper
+      {...props}
+      style={{ zIndex: 1301, width: "auto", minWidth: props.style?.width }}
+    />
+  );
+};
+
 export default function CreateInvoice({ onSuccess }: CreateInvoiceProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -106,6 +124,7 @@ export default function CreateInvoice({ onSuccess }: CreateInvoiceProps) {
   const [openInvoiceType, setOpenInvoiceType] = useState(false);
   const [openInvoiceProject, setOpenInvoiceProject] = useState(false);
 
+  // Memoize form to prevent unnecessary re-renders
   const form = useForm<CreateInvoiceFormValues>({
     resolver: zodResolver(createInvoiceSchema),
     defaultValues: {
@@ -247,7 +266,22 @@ export default function CreateInvoice({ onSuccess }: CreateInvoiceProps) {
       }
 
       const result = await response.json();
-      return result.payment_project;
+      console.log("Payment project response:", result);
+
+      // Check if the response has a data property with an array of payment projects
+      if (
+        result.success &&
+        result.data &&
+        Array.isArray(result.data) &&
+        result.data.length > 0
+      ) {
+        // Return the first payment project code from the array
+        return result.data[0];
+      } else if (result.payment_project) {
+        // Fallback to direct payment_project property for backward compatibility
+        return result.payment_project;
+      }
+      return null;
     } catch (error) {
       console.error("Error fetching supplier payment project:", error);
       Swal.fire({
@@ -276,7 +310,12 @@ export default function CreateInvoice({ onSuccess }: CreateInvoiceProps) {
       }
 
       const result = await response.json();
-      setProjects(Array.isArray(result) ? result : []);
+      // Extract projects from the data property and sort by code
+      const projectsData = result.data || [];
+      const sortedProjects = [...projectsData].sort((a, b) =>
+        a.code.localeCompare(b.code)
+      );
+      setProjects(sortedProjects);
     } catch (error) {
       console.error("Error fetching projects:", error);
       Swal.fire({
@@ -321,7 +360,59 @@ export default function CreateInvoice({ onSuccess }: CreateInvoiceProps) {
     fetchProjects();
   }, []);
 
-  const handleDocumentSelect = (docId: number) => {
+  // Memoize the sorted projects to prevent re-sorting on every render
+  const sortedProjects = useMemo(() => {
+    return [...projects].sort((a, b) => a.code.localeCompare(b.code));
+  }, [projects]);
+
+  // Memoize the supplier options to prevent re-rendering
+  const supplierOptions = useMemo(() => {
+    return suppliers.map((supplier) => ({
+      id: supplier.id,
+      label: `${supplier.name} (${supplier.sap_code})`,
+    }));
+  }, [suppliers]);
+
+  // Memoize the invoice type options
+  const invoiceTypeOptions = useMemo(() => {
+    return invoiceTypes.map((type) => ({
+      id: type.id,
+      label: type.type_name,
+    }));
+  }, [invoiceTypes]);
+
+  // Use callbacks for event handlers to prevent unnecessary re-renders
+  const handleSupplierChange = useCallback(
+    async (_: React.SyntheticEvent, newValue: Supplier | null, field: any) => {
+      const supplierId = newValue ? newValue.id.toString() : "";
+      form.setValue("supplier_id", supplierId);
+      field.onChange(supplierId);
+
+      // Fetch and set payment project when supplier changes
+      if (supplierId) {
+        const paymentProject = await fetchSupplierPaymentProject(supplierId);
+        if (paymentProject) {
+          console.log("Setting payment project to:", paymentProject);
+          form.setValue("payment_project", paymentProject, {
+            shouldValidate: true,
+          });
+        } else {
+          // Clear payment project if none is returned
+          form.setValue("payment_project", "", {
+            shouldValidate: true,
+          });
+        }
+      } else {
+        // Clear payment project if no supplier is selected
+        form.setValue("payment_project", "", {
+          shouldValidate: true,
+        });
+      }
+    },
+    [form]
+  );
+
+  const handleDocumentSelect = useCallback((docId: number) => {
     setSelectedDocs((prev) => {
       if (prev.includes(docId)) {
         return prev.filter((id) => id !== docId);
@@ -329,7 +420,7 @@ export default function CreateInvoice({ onSuccess }: CreateInvoiceProps) {
         return [...prev, docId];
       }
     });
-  };
+  }, []);
 
   const onSubmit = async (values: CreateInvoiceFormValues) => {
     try {
@@ -343,7 +434,7 @@ export default function CreateInvoice({ onSuccess }: CreateInvoiceProps) {
         user_id: user?.id,
       };
 
-      console.log(payload);
+      console.log("Submitting payload:", payload);
 
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/documents/invoices/store`,
@@ -357,8 +448,13 @@ export default function CreateInvoice({ onSuccess }: CreateInvoiceProps) {
         }
       );
 
+      const result = await response.json();
+      console.log("API response:", result);
+
       if (!response.ok) {
-        throw new Error("Failed to create invoice");
+        // Extract error message from response if available
+        const errorMessage = result.message || "Failed to create invoice";
+        throw new Error(errorMessage);
       }
 
       Swal.fire({
@@ -377,6 +473,7 @@ export default function CreateInvoice({ onSuccess }: CreateInvoiceProps) {
       Swal.fire({
         icon: "error",
         title: "Failed to create invoice",
+        text: error instanceof Error ? error.message : "Unknown error occurred",
       });
     } finally {
       setIsSubmitting(false);
@@ -396,28 +493,79 @@ export default function CreateInvoice({ onSuccess }: CreateInvoiceProps) {
                   fullWidth
                   error={!!form.formState.errors.supplier_id}
                 >
-                  <InputLabel>Supplier</InputLabel>
-                  <Select
-                    {...field}
-                    label="Supplier"
-                    disabled={isLoadingSuppliers}
-                    endAdornment={
-                      isLoadingSuppliers ? <CircularProgress size={20} /> : null
+                  <Autocomplete
+                    value={
+                      suppliers.find((s) => s.id.toString() === field.value) ||
+                      undefined
                     }
-                  >
-                    {suppliers.map((supplier) => (
-                      <MenuItem
-                        key={supplier.id}
-                        value={supplier.id.toString()}
-                      >
-                        {supplier.name} ({supplier.sap_code})
-                      </MenuItem>
-                    ))}
-                  </Select>
-                  <FormHelperText>
-                    {form.formState.errors.supplier_id?.message ||
-                      "Select a supplier"}
-                  </FormHelperText>
+                    onChange={(e, newValue) =>
+                      handleSupplierChange(e, newValue, field)
+                    }
+                    options={suppliers}
+                    getOptionLabel={(option) => {
+                      if (!option) return "";
+                      return `${option.name} (${option.sap_code})`;
+                    }}
+                    renderOption={(props, option) => (
+                      <li {...props}>
+                        <Box sx={{ display: "flex", flexDirection: "column" }}>
+                          <Typography variant="body1">{option.name}</Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {option.sap_code}
+                          </Typography>
+                        </Box>
+                      </li>
+                    )}
+                    filterOptions={(options, state) => {
+                      const inputValue = state.inputValue.toLowerCase().trim();
+                      if (!inputValue) return options;
+
+                      return options.filter(
+                        (option) =>
+                          option.name.toLowerCase().includes(inputValue) ||
+                          option.sap_code.toLowerCase().includes(inputValue)
+                      );
+                    }}
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="Supplier"
+                        placeholder="Search supplier..."
+                        error={!!form.formState.errors.supplier_id}
+                        helperText={
+                          form.formState.errors.supplier_id?.message ||
+                          "Select a supplier"
+                        }
+                        InputProps={{
+                          ...params.InputProps,
+                          endAdornment: (
+                            <>
+                              {isLoadingSuppliers ? (
+                                <CircularProgress size={20} />
+                              ) : (
+                                params.InputProps.endAdornment
+                              )}
+                            </>
+                          ),
+                        }}
+                      />
+                    )}
+                    loading={isLoadingSuppliers}
+                    disabled={isLoadingSuppliers}
+                    disablePortal={false}
+                    openOnFocus
+                    blurOnSelect
+                    sx={{
+                      "& .MuiAutocomplete-inputRoot": {
+                        paddingLeft: "12px !important",
+                        borderRadius: 1,
+                      },
+                    }}
+                    PopperComponent={CustomPopper}
+                    ListboxProps={{
+                      style: { maxHeight: "200px" },
+                    }}
+                  />
                 </FormControl>
               )}
             />
@@ -429,27 +577,67 @@ export default function CreateInvoice({ onSuccess }: CreateInvoiceProps) {
               control={form.control}
               render={({ field }) => (
                 <FormControl fullWidth error={!!form.formState.errors.type_id}>
-                  <InputLabel>Invoice Type</InputLabel>
-                  <Select
-                    {...field}
-                    label="Invoice Type"
-                    disabled={isLoadingInvoiceTypes}
-                    endAdornment={
-                      isLoadingInvoiceTypes ? (
-                        <CircularProgress size={20} />
-                      ) : null
+                  <Autocomplete
+                    value={
+                      invoiceTypes.find(
+                        (t) => t.id.toString() === field.value
+                      ) || undefined
                     }
-                  >
-                    {invoiceTypes.map((type) => (
-                      <MenuItem key={type.id} value={type.id.toString()}>
-                        {type.type_name}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                  <FormHelperText>
-                    {form.formState.errors.type_id?.message ||
-                      "Select an invoice type"}
-                  </FormHelperText>
+                    onChange={(_, newValue) => {
+                      field.onChange(newValue ? newValue.id.toString() : "");
+                    }}
+                    options={invoiceTypes}
+                    getOptionLabel={(option) => {
+                      if (!option) return "";
+                      return option.type_name;
+                    }}
+                    renderOption={(props, option) => (
+                      <li {...props}>
+                        <Typography variant="body1">
+                          {option.type_name}
+                        </Typography>
+                      </li>
+                    )}
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="Invoice Type"
+                        placeholder="Search invoice type..."
+                        error={!!form.formState.errors.type_id}
+                        helperText={
+                          form.formState.errors.type_id?.message ||
+                          "Select an invoice type"
+                        }
+                        InputProps={{
+                          ...params.InputProps,
+                          endAdornment: (
+                            <>
+                              {isLoadingInvoiceTypes ? (
+                                <CircularProgress size={20} />
+                              ) : (
+                                params.InputProps.endAdornment
+                              )}
+                            </>
+                          ),
+                        }}
+                      />
+                    )}
+                    loading={isLoadingInvoiceTypes}
+                    disabled={isLoadingInvoiceTypes}
+                    disablePortal={false}
+                    openOnFocus
+                    blurOnSelect
+                    sx={{
+                      "& .MuiAutocomplete-inputRoot": {
+                        paddingLeft: "12px !important",
+                        borderRadius: 1,
+                      },
+                    }}
+                    PopperComponent={CustomPopper}
+                    ListboxProps={{
+                      style: { maxHeight: "200px" },
+                    }}
+                  />
                 </FormControl>
               )}
             />
@@ -556,25 +744,66 @@ export default function CreateInvoice({ onSuccess }: CreateInvoiceProps) {
                   fullWidth
                   error={!!form.formState.errors.invoice_project}
                 >
-                  <InputLabel>Invoice Project</InputLabel>
-                  <Select
-                    {...field}
-                    label="Invoice Project"
-                    disabled={isLoadingProjects}
-                    endAdornment={
-                      isLoadingProjects ? <CircularProgress size={20} /> : null
+                  <Autocomplete
+                    value={
+                      sortedProjects.find((p) => p.code === field.value) ||
+                      undefined
                     }
-                  >
-                    {projects.map((project) => (
-                      <MenuItem key={project.code} value={project.code}>
-                        {project.code}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                  <FormHelperText>
-                    {form.formState.errors.invoice_project?.message ||
-                      "Select a project"}
-                  </FormHelperText>
+                    onChange={(_, newValue) => {
+                      field.onChange(newValue ? newValue.code : "");
+                    }}
+                    options={sortedProjects}
+                    getOptionLabel={(option) => {
+                      if (!option) return "";
+                      return option.code;
+                    }}
+                    renderOption={(props, option) => (
+                      <li {...props}>
+                        <Box sx={{ display: "flex", flexDirection: "column" }}>
+                          <Typography variant="body1">{option.code}</Typography>
+                        </Box>
+                      </li>
+                    )}
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="Invoice Project"
+                        placeholder="Search project..."
+                        error={!!form.formState.errors.invoice_project}
+                        helperText={
+                          form.formState.errors.invoice_project?.message ||
+                          "Select a project"
+                        }
+                        InputProps={{
+                          ...params.InputProps,
+                          endAdornment: (
+                            <>
+                              {isLoadingProjects ? (
+                                <CircularProgress size={20} />
+                              ) : (
+                                params.InputProps.endAdornment
+                              )}
+                            </>
+                          ),
+                        }}
+                      />
+                    )}
+                    loading={isLoadingProjects}
+                    disabled={isLoadingProjects}
+                    disablePortal={false}
+                    openOnFocus
+                    blurOnSelect
+                    sx={{
+                      "& .MuiAutocomplete-inputRoot": {
+                        paddingLeft: "12px !important",
+                        borderRadius: 1,
+                      },
+                    }}
+                    PopperComponent={CustomPopper}
+                    ListboxProps={{
+                      style: { maxHeight: "200px" },
+                    }}
+                  />
                 </FormControl>
               )}
             />
@@ -585,13 +814,71 @@ export default function CreateInvoice({ onSuccess }: CreateInvoiceProps) {
               name="payment_project"
               control={form.control}
               render={({ field }) => (
-                <TextField
-                  {...field}
+                <FormControl
                   fullWidth
-                  label="Payment Project"
                   error={!!form.formState.errors.payment_project}
-                  helperText={form.formState.errors.payment_project?.message}
-                />
+                >
+                  <Autocomplete
+                    value={
+                      sortedProjects.find((p) => p.code === field.value) ||
+                      undefined
+                    }
+                    onChange={(_, newValue) => {
+                      field.onChange(newValue ? newValue.code : "");
+                    }}
+                    options={sortedProjects}
+                    getOptionLabel={(option) => {
+                      if (!option) return "";
+                      return option.code;
+                    }}
+                    renderOption={(props, option) => (
+                      <li {...props}>
+                        <Box sx={{ display: "flex", flexDirection: "column" }}>
+                          <Typography variant="body1">{option.code}</Typography>
+                        </Box>
+                      </li>
+                    )}
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="Payment Project"
+                        placeholder="Search project..."
+                        error={!!form.formState.errors.payment_project}
+                        helperText={
+                          form.formState.errors.payment_project?.message ||
+                          "Select a payment project"
+                        }
+                        InputProps={{
+                          ...params.InputProps,
+                          endAdornment: (
+                            <>
+                              {isLoadingProjects ? (
+                                <CircularProgress size={20} />
+                              ) : (
+                                params.InputProps.endAdornment
+                              )}
+                            </>
+                          ),
+                        }}
+                      />
+                    )}
+                    loading={isLoadingProjects}
+                    disabled={isLoadingProjects}
+                    disablePortal={false}
+                    openOnFocus
+                    blurOnSelect
+                    sx={{
+                      "& .MuiAutocomplete-inputRoot": {
+                        paddingLeft: "12px !important",
+                        borderRadius: 1,
+                      },
+                    }}
+                    PopperComponent={CustomPopper}
+                    ListboxProps={{
+                      style: { maxHeight: "200px" },
+                    }}
+                  />
+                </FormControl>
               )}
             />
           </Grid>
@@ -623,7 +910,7 @@ export default function CreateInvoice({ onSuccess }: CreateInvoiceProps) {
                 <TextField
                   fullWidth
                   label="Amount"
-                  value={formatNumber(field.value)}
+                  value={formatNumber(field.value || "")}
                   onChange={(e) => {
                     const value = e.target.value;
                     if (/^[\d,]*\.?\d*$/.test(value)) {

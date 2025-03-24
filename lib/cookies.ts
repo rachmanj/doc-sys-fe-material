@@ -3,7 +3,14 @@ export function setCookie(name: string, value: string, days: number) {
     const date = new Date();
     date.setTime(date.getTime() + days * 24 * 60 * 60 * 1000);
     const expires = `expires=${date.toUTCString()}`;
-    document.cookie = `${name}=${value};${expires};path=/;SameSite=Lax`;
+
+    // Check if we're in a secure context (HTTPS)
+    const secure = window.location.protocol === "https:" ? "Secure;" : "";
+
+    // Use SameSite=None for cross-site requests when secure
+    const sameSite = secure ? "SameSite=None;" : "SameSite=Lax;";
+
+    document.cookie = `${name}=${value};${expires};path=/;${sameSite}${secure}`;
   } catch (error) {
     console.error("Error setting cookie:", error);
   }
@@ -28,7 +35,13 @@ export function getCookie(name: string): string | null {
 
 export function deleteCookie(name: string) {
   try {
-    document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;SameSite=Lax`;
+    // Check if we're in a secure context (HTTPS)
+    const secure = window.location.protocol === "https:" ? "Secure;" : "";
+
+    // Use SameSite=None for cross-site requests when secure
+    const sameSite = secure ? "SameSite=None;" : "SameSite=Lax;";
+
+    document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;${sameSite}${secure}`;
   } catch (error) {
     console.error("Error deleting cookie:", error);
   }
